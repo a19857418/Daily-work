@@ -13,6 +13,18 @@ async function verifyLogin(username, password) {
   return { id: user.id, username: user.username, role: user.role };
 }
 
+// 簡化版「系統設定密碼解鎖」：不需要輸入帳號，只要密碼對得上任一 admin 帳號即可
+// （適合單純化階段：只有極少數人會動到系統設定，共用一組密碼就夠）
+async function verifyAdminPassword(password) {
+  const res = await pool.query("SELECT id, username, password_hash FROM users WHERE role='admin'");
+  for (const u of res.rows) {
+    if (await bcrypt.compare(password, u.password_hash)) {
+      return { id: u.id, username: u.username, role: 'admin' };
+    }
+  }
+  return null;
+}
+
 function issueToken(user) {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('JWT_SECRET 未設定');
@@ -49,4 +61,4 @@ function requireRole(role) {
   };
 }
 
-module.exports = { verifyLogin, issueToken, requireAuth, requireRole };
+module.exports = { verifyLogin, verifyAdminPassword, issueToken, requireAuth, requireRole };

@@ -111,12 +111,11 @@
     padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:200;}
   .toast.show{opacity:1;transform:translateY(0);}
 
-  .auth-info{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text-dim);display:flex;align-items:center;gap:8px;}
-  .role-chip{padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:700;}
-  .role-chip.admin{background:#2c2416;color:var(--amber);}
-  .role-chip.staff{background:#1c2440;color:var(--violet);}
-  .login-box{max-width:340px;}
-  .login-error{color:var(--red);font-size:12.5px;min-height:16px;}
+  .lock-pill{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 12px;border-radius:12px;
+    border:1px solid var(--line);color:var(--text-dim);background:var(--panel-2);cursor:pointer;white-space:nowrap;}
+  .lock-pill.unlocked{color:var(--green);border-color:#245239;}
+  .unlock-box{max-width:320px;}
+  .unlock-error{color:var(--red);font-size:12.5px;min-height:16px;}
 </style>
 </head>
 <body>
@@ -125,10 +124,7 @@
   <div class="brand">🚗 車款大小查詢工具 <span class="tag">獨立功能</span></div>
   <div style="display:flex;align-items:center;gap:14px;">
     <span class="sync-pill busy" id="syncTag">連線中…</span>
-    <div class="auth-info" id="authInfo" hidden>
-      <span id="authUserLabel"></span>
-      <button class="btn sm" id="logoutBtn">登出</button>
-    </div>
+    <button class="lock-pill" id="lockPill">🔒 解鎖編輯</button>
   </div>
 </div>
 
@@ -136,23 +132,21 @@
 <div class="toast" id="toast"></div>
 <input type="file" id="importFileInput" accept="application/json" hidden>
 
-<div class="modal-overlay" id="loginOverlay" hidden>
-  <div class="modal-box login-box">
+<div class="modal-overlay" id="unlockOverlay" hidden>
+  <div class="modal-box unlock-box">
     <div class="modal-head">
-      <div class="modal-title">登入</div>
+      <div class="modal-title">輸入密碼以編輯</div>
+      <button class="btn sm" id="unlockCloseX">✕</button>
     </div>
-    <form id="loginForm">
+    <form id="unlockForm">
       <div class="modal-body">
-        <label class="field">帳號
-          <input type="text" id="loginUsername" autocomplete="username" required>
-        </label>
         <label class="field">密碼
-          <input type="password" id="loginPassword" autocomplete="current-password" required style="font-family:'JetBrains Mono',monospace;">
+          <input type="password" id="unlockPassword" autocomplete="current-password" required autofocus style="font-family:'JetBrains Mono',monospace;">
         </label>
-        <div class="login-error" id="loginError"></div>
+        <div class="unlock-error" id="unlockError"></div>
       </div>
       <div class="modal-foot">
-        <button type="submit" class="btn primary">登入</button>
+        <button type="submit" class="btn primary">解鎖</button>
       </div>
     </form>
   </div>
@@ -195,7 +189,7 @@ let DB = null;
 let dbVersion = null;
 const STORAGE_KEY = "vehicle-size-lookup-db";
 
-/* ---- 帳號登入（JWT）---- */
+/* ---- 密碼解鎖（僅新增/編輯/刪除車款需要；查詢瀏覽任何人都能用）---- */
 const AUTH_KEY = 'auth-session';
 function getAuth(){
   try{ return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); }catch(e){ return null; }
@@ -210,29 +204,28 @@ function apiHeaders(withJson){
   if(withJson) h['Content-Type'] = 'application/json';
   return h;
 }
-async function login(username, password){
-  const res = await fetch(`${API_BASE}/auth/login`, {
+async function unlockWithPassword(password){
+  const res = await fetch(`${API_BASE}/auth/unlock-settings`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ password })
   });
   const json = await res.json();
-  if(!res.ok) throw new Error(json.error || '登入失敗');
+  if(!res.ok) throw new Error(json.error || '解鎖失敗');
   setAuth({ token: json.token, username: json.username, role: json.role });
 }
-function showLoginOverlay(message){
-  document.getElementById('loginError').textContent = message || '';
-  document.getElementById('loginOverlay').hidden = false;
+function showUnlockOverlay(message){
+  document.getElementById('unlockError').textContent = message || '';
+  document.getElementById('unlockPassword').value = '';
+  document.getElementById('unlockOverlay').hidden = false;
+  document.getElementById('unlockPassword').focus();
 }
-function hideLoginOverlay(){ document.getElementById('loginOverlay').hidden = true; }
+function hideUnlockOverlay(){ document.getElementById('unlockOverlay').hidden = true; }
 function updateAuthUI(){
-  const auth = getAuth();
-  const info = document.getElementById('authInfo');
-  info.hidden = !auth;
-  if(auth){
-    document.getElementById('authUserLabel').innerHTML =
-      `${auth.username} <span class="role-chip ${auth.role}">${auth.role==='admin'?'管理者':'一般帳號'}</span>`;
-  }
-  document.querySelectorAll('.admin-only').forEach(el=>{ el.style.display = isAdmin() ? '' : 'none'; });
+  const unlocked = isAdmin();
+  const pill = document.getElementById('lockPill');
+  pill.textContent = unlocked ? '🔓 已解鎖（點此鎖定）' : '🔒 解鎖編輯';
+  pill.classList.toggle('unlocked', unlocked);
+  document.querySelectorAll('.admin-only').forEach(el=>{ el.style.display = unlocked ? '' : 'none'; });
 }
 function setSyncTag(state, text){
   const el = document.getElementById('syncTag');
@@ -249,11 +242,6 @@ async function loadDB(){
   setSyncTag('busy', '連線中…');
   try{
     const res = await fetch(`${API_BASE}/vehicle-catalog`, { headers: apiHeaders(false) });
-    if(res.status === 401){
-      clearAuth(); updateAuthUI();
-      showLoginOverlay('登入逾期，請重新登入');
-      throw new Error('unauthorized');
-    }
     if(res.ok){
       const json = await res.json();
       DB = json.data; dbVersion = json.version;
@@ -285,15 +273,10 @@ async function saveDB(){
       headers: apiHeaders(true),
       body: JSON.stringify({ expectedVersion: dbVersion, data: DB })
     });
-    if(res.status === 401){
+    if(res.status === 401 || res.status === 403){
       clearAuth(); updateAuthUI();
       setSyncTag('err', '離線快取中');
-      showLoginOverlay('登入逾期，請重新登入');
-      return;
-    }
-    if(res.status === 403){
-      setSyncTag('err', '離線快取中');
-      toast('⚠ 此帳號沒有寫入權限，變更未儲存到後端（僅存於本機）');
+      toast('⚠ 編輯權限已失效，請重新解鎖後再試一次');
       return;
     }
     if(res.status === 409){
@@ -543,33 +526,34 @@ document.getElementById('importFileInput').onchange = (e)=>{
   if(file) importDBFromFile(file);
 };
 
-document.getElementById('loginForm').onsubmit = async (e)=>{
+document.getElementById('unlockForm').onsubmit = async (e)=>{
   e.preventDefault();
-  const username = document.getElementById('loginUsername').value.trim();
-  const password = document.getElementById('loginPassword').value;
+  const password = document.getElementById('unlockPassword').value;
   try{
-    await login(username, password);
-    document.getElementById('loginPassword').value = '';
-    hideLoginOverlay();
-    await boot();
+    await unlockWithPassword(password);
+    hideUnlockOverlay();
+    updateAuthUI();
+    render();
   }catch(err){
-    document.getElementById('loginError').textContent = err.message;
+    document.getElementById('unlockError').textContent = err.message;
   }
 };
-document.getElementById('logoutBtn').onclick = ()=>{
-  clearAuth();
-  location.reload();
+document.getElementById('unlockCloseX').onclick = hideUnlockOverlay;
+document.getElementById('lockPill').onclick = ()=>{
+  if(isAdmin()){
+    clearAuth();
+    updateAuthUI();
+    render();
+    toast('已鎖定編輯功能');
+  } else {
+    showUnlockOverlay();
+  }
 };
 
-async function boot(){
+(async function init(){
   await loadDB();
   render();
   updateAuthUI();
-}
-
-(function init(){
-  if(getAuth()){ boot(); }
-  else { showLoginOverlay(); }
 })();
 </script>
 </body>

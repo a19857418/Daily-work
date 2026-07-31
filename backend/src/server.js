@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-const { requireAuth } = require('./auth');
 const authRoutes = require('./routes/auth');
 const { makeSettingsRouter } = require('./routes/settingsResource');
 const vehicleCatalogRepo = require('./repositories/vehicleCatalog');
@@ -22,9 +21,9 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 
 app.use('/api/auth', authRoutes);
 
-// 以下路徑都需要登入（任何角色皆可讀取；寫入/還原/匯入限 admin，見 settingsResource.js）
-app.use('/api/vehicle-catalog', requireAuth, makeSettingsRouter(vehicleCatalogRepo));
-app.use('/api/quote-settings', requireAuth, makeSettingsRouter(quoteSettingsRepo));
+// 讀取（GET）公開，任何有連結的人都能查詢/報價；寫入/還原/匯入需要密碼解鎖（見 settingsResource.js）
+app.use('/api/vehicle-catalog', makeSettingsRouter(vehicleCatalogRepo));
+app.use('/api/quote-settings', makeSettingsRouter(quoteSettingsRepo));
 
 app.use((req, res) => res.status(404).json({ error: '找不到此路徑' }));
 

@@ -1,8 +1,9 @@
 const express = require('express');
-const { requireRole } = require('../auth');
+const { requireAuth, requireRole } = require('../auth');
 const { listHistory, getHistorySnapshot, VersionConflictError } = require('../repositories/historyMeta');
 
-// 建立一組共用的「整包設定資源」路由：GET（任何已登入帳號）／PUT・history・restore（僅 admin）
+// 建立一組共用的「整包設定資源」路由：GET 公開（任何有連結的人都能查詢）；
+// PUT・restore・import 需要密碼解鎖（requireAuth 驗證 JWT + requireRole 限定 admin）
 function makeSettingsRouter(repo) {
   const router = express.Router();
 
@@ -16,7 +17,7 @@ function makeSettingsRouter(repo) {
     }
   });
 
-  router.put('/', requireRole('admin'), async (req, res, next) => {
+  router.put('/', requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { expectedVersion, data } = req.body || {};
       if (data === undefined) return res.status(400).json({ error: '缺少 data 欄位' });
@@ -42,7 +43,7 @@ function makeSettingsRouter(repo) {
     }
   });
 
-  router.post('/restore/:version', requireRole('admin'), async (req, res, next) => {
+  router.post('/restore/:version', requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const version = parseInt(req.params.version, 10);
       const snapshot = await getHistorySnapshot(repo.APP_KEY, version);
@@ -55,7 +56,7 @@ function makeSettingsRouter(repo) {
     }
   });
 
-  router.post('/import', requireRole('admin'), async (req, res, next) => {
+  router.post('/import', requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const { data } = req.body || {};
       if (data === undefined) return res.status(400).json({ error: '缺少 data 欄位' });

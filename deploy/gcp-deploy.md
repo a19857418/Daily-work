@@ -46,7 +46,7 @@ gcloud sql instances describe shop-settings-db --format='value(connectionName)'
 
 ## 2. 建立資料表（首次部署時執行一次）
 
-用 Cloud SQL Auth Proxy 從本機（或 Cloud Shell）連到剛建立的資料庫，執行 migration 與建立第一個管理者帳號：
+用 Cloud SQL Auth Proxy 從本機（或 Cloud Shell）連到剛建立的資料庫，執行 migration 與建立「系統設定密碼」：
 
 ```bash
 # 下載 Cloud SQL Auth Proxy（Cloud Shell 已內建，本機需自行下載）
@@ -56,8 +56,10 @@ cloud-sql-proxy YOUR_PROJECT_ID:asia-east1:shop-settings-db --port=5433 &
 
 cd backend
 DATABASE_URL="postgres://app_user:你在上一步設定的密碼@127.0.0.1:5433/shop_settings" npm run migrate
-DATABASE_URL="postgres://app_user:你在上一步設定的密碼@127.0.0.1:5433/shop_settings" npm run create-user -- boss 你的登入密碼 admin
+DATABASE_URL="postgres://app_user:你在上一步設定的密碼@127.0.0.1:5433/shop_settings" npm run create-user -- admin 你想給系統設定用的密碼 admin
 ```
+
+> 這個「密碼」就是前端「系統設定」跳出的密碼框要輸入的東西；帳號名稱（這裡用 `admin`）只是資料庫內部欄位，前端不會問帳號，只問密碼。
 
 ## 3. 把密鑰放進 Secret Manager
 
