@@ -110,18 +110,54 @@
   .toast{position:fixed;bottom:22px;right:22px;background:var(--panel-2);border:1px solid var(--amber-dim);color:var(--amber);
     padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:200;}
   .toast.show{opacity:1;transform:translateY(0);}
+
+  .auth-info{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text-dim);display:flex;align-items:center;gap:8px;}
+  .role-chip{padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:700;}
+  .role-chip.admin{background:#2c2416;color:var(--amber);}
+  .role-chip.staff{background:#1c2440;color:var(--violet);}
+  .login-box{max-width:340px;}
+  .login-error{color:var(--red);font-size:12.5px;min-height:16px;}
 </style>
 </head>
 <body>
 
 <div class="topbar">
   <div class="brand">🚗 車款大小查詢工具 <span class="tag">獨立功能</span></div>
-  <span class="sync-pill busy" id="syncTag">連線中…</span>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span class="sync-pill busy" id="syncTag">連線中…</span>
+    <div class="auth-info" id="authInfo" hidden>
+      <span id="authUserLabel"></span>
+      <button class="btn sm" id="logoutBtn">登出</button>
+    </div>
+  </div>
 </div>
 
 <main id="app"></main>
 <div class="toast" id="toast"></div>
 <input type="file" id="importFileInput" accept="application/json" hidden>
+
+<div class="modal-overlay" id="loginOverlay" hidden>
+  <div class="modal-box login-box">
+    <div class="modal-head">
+      <div class="modal-title">登入</div>
+    </div>
+    <form id="loginForm">
+      <div class="modal-body">
+        <label class="field">帳號
+          <input type="text" id="loginUsername" autocomplete="username" required>
+        </label>
+        <label class="field">密碼
+          <input type="password" id="loginPassword" autocomplete="current-password" required style="font-family:'JetBrains Mono',monospace;">
+        </label>
+        <div class="login-error" id="loginError"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="submit" class="btn primary">登入</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalOverlay" hidden>
   <div class="modal-box">
     <div class="modal-head">
@@ -151,24 +187,52 @@ function factoryVehicleDB(){
 
 /* =========================================================
    後端連線設定
-   部署時請修改成你實際的後端網址與 API Key（見 backend/.env.example）
+   部署時請修改成你實際的後端網址（見 backend/README.md 與 deploy/gcp-deploy.md）
    ========================================================= */
 const API_BASE = "http://localhost:4000/api";
-const API_KEY  = "change-me-to-a-long-random-secret";
 
 let DB = null;
 let dbVersion = null;
 const STORAGE_KEY = "vehicle-size-lookup-db";
 
-function clientId(){
-  let id = localStorage.getItem('client-id');
-  if(!id){ id = 'device-' + Math.random().toString(36).slice(2,10); try{ localStorage.setItem('client-id', id); }catch(e){} }
-  return id;
+/* ---- 帳號登入（JWT）---- */
+const AUTH_KEY = 'auth-session';
+function getAuth(){
+  try{ return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); }catch(e){ return null; }
 }
+function setAuth(auth){ try{ localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); }catch(e){} }
+function clearAuth(){ try{ localStorage.removeItem(AUTH_KEY); }catch(e){} }
+function isAdmin(){ return getAuth()?.role === 'admin'; }
 function apiHeaders(withJson){
-  const h = { 'X-Api-Key': API_KEY, 'X-Client-Id': clientId() };
+  const auth = getAuth();
+  const h = {};
+  if(auth?.token) h['Authorization'] = 'Bearer ' + auth.token;
   if(withJson) h['Content-Type'] = 'application/json';
   return h;
+}
+async function login(username, password){
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username, password })
+  });
+  const json = await res.json();
+  if(!res.ok) throw new Error(json.error || '登入失敗');
+  setAuth({ token: json.token, username: json.username, role: json.role });
+}
+function showLoginOverlay(message){
+  document.getElementById('loginError').textContent = message || '';
+  document.getElementById('loginOverlay').hidden = false;
+}
+function hideLoginOverlay(){ document.getElementById('loginOverlay').hidden = true; }
+function updateAuthUI(){
+  const auth = getAuth();
+  const info = document.getElementById('authInfo');
+  info.hidden = !auth;
+  if(auth){
+    document.getElementById('authUserLabel').innerHTML =
+      `${auth.username} <span class="role-chip ${auth.role}">${auth.role==='admin'?'管理者':'一般帳號'}</span>`;
+  }
+  document.querySelectorAll('.admin-only').forEach(el=>{ el.style.display = isAdmin() ? '' : 'none'; });
 }
 function setSyncTag(state, text){
   const el = document.getElementById('syncTag');
@@ -184,7 +248,12 @@ function nowHM(){
 async function loadDB(){
   setSyncTag('busy', '連線中…');
   try{
-    const res = await fetch(`${API_BASE}/store/${STORAGE_KEY}`, { headers: apiHeaders(false) });
+    const res = await fetch(`${API_BASE}/vehicle-catalog`, { headers: apiHeaders(false) });
+    if(res.status === 401){
+      clearAuth(); updateAuthUI();
+      showLoginOverlay('登入逾期，請重新登入');
+      throw new Error('unauthorized');
+    }
     if(res.ok){
       const json = await res.json();
       DB = json.data; dbVersion = json.version;
@@ -211,11 +280,22 @@ async function saveDB(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }catch(e){}
   setSyncTag('busy', '儲存中…');
   try{
-    const res = await fetch(`${API_BASE}/store/${STORAGE_KEY}`, {
+    const res = await fetch(`${API_BASE}/vehicle-catalog`, {
       method: 'PUT',
       headers: apiHeaders(true),
       body: JSON.stringify({ expectedVersion: dbVersion, data: DB })
     });
+    if(res.status === 401){
+      clearAuth(); updateAuthUI();
+      setSyncTag('err', '離線快取中');
+      showLoginOverlay('登入逾期，請重新登入');
+      return;
+    }
+    if(res.status === 403){
+      setSyncTag('err', '離線快取中');
+      toast('⚠ 此帳號沒有寫入權限，變更未儲存到後端（僅存於本機）');
+      return;
+    }
     if(res.status === 409){
       setSyncTag('err', '版本衝突');
       toast('⚠ 資料已被其他裝置更新，請重新整理頁面');
@@ -311,14 +391,14 @@ function render(){
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn sm" id="exportBtn">⭳ 匯出JSON</button>
-          <button class="btn sm" id="importBtn">⭱ 匯入JSON</button>
-          <button class="btn primary sm" id="addVehicleBtn">＋ 新增車款</button>
+          <button class="btn sm admin-only" id="importBtn" style="display:none;">⭱ 匯入JSON</button>
+          <button class="btn primary sm admin-only" id="addVehicleBtn" style="display:none;">＋ 新增車款</button>
         </div>
       </div>
       <div class="pill-tabs" id="brandTabs">
         <button data-brand="全部" class="${state.brandTab==='全部'?'active':''}">全部</button>
         ${DB.brandOrder.map(b=>`<button data-brand="${b}" class="${state.brandTab===b?'active':''}">${b}</button>`).join('')}
-        <button class="add" id="addBrandBtn">＋ 新增廠牌</button>
+        <button class="add admin-only" id="addBrandBtn" style="display:none;">＋ 新增廠牌</button>
       </div>
       <div id="vehicleTableWrap"></div>
     </div>
@@ -405,7 +485,7 @@ function renderVehicleTable(){
           <td>${v.length||'<span class="empty-hint">—</span>'}</td>
           <td><span class="cat-badge ${v.cat}">${v.cat}</span></td>
           <td>
-            <div class="row-actions">
+            <div class="row-actions admin-only" style="display:none;">
               <button class="icon-btn" data-edit-id="${v.id}" title="編輯">✎</button>
               <button class="icon-btn danger" data-del-id="${v.id}" title="刪除">✕</button>
             </div>
@@ -454,6 +534,7 @@ function renderVehicleTable(){
       await saveDB(); renderVehicleTable();
     };
   });
+  updateAuthUI();
 }
 
 document.getElementById('importFileInput').onchange = (e)=>{
@@ -462,9 +543,33 @@ document.getElementById('importFileInput').onchange = (e)=>{
   if(file) importDBFromFile(file);
 };
 
-(async function init(){
+document.getElementById('loginForm').onsubmit = async (e)=>{
+  e.preventDefault();
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  try{
+    await login(username, password);
+    document.getElementById('loginPassword').value = '';
+    hideLoginOverlay();
+    await boot();
+  }catch(err){
+    document.getElementById('loginError').textContent = err.message;
+  }
+};
+document.getElementById('logoutBtn').onclick = ()=>{
+  clearAuth();
+  location.reload();
+};
+
+async function boot(){
   await loadDB();
   render();
+  updateAuthUI();
+}
+
+(function init(){
+  if(getAuth()){ boot(); }
+  else { showLoginOverlay(); }
 })();
 </script>
 </body>

@@ -1,16 +1,20 @@
 {
   "name": "shop-settings-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "車款查詢工具 / 犀牛皮貼膜報價系統共用的後台設定資料庫 API（規劃規格書 Phase 1：Key-Value 儲存）",
+  "description": "車款查詢工具 / 犀牛皮貼膜報價系統共用的後台設定資料庫 API（方案 B：PostgreSQL 正規化 Schema，含帳號角色權限，可部署到 GCP Cloud Run + Cloud SQL）",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "migrate": "node src/migrate.js",
+    "create-user": "node scripts/create-user.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.12.0"
   }
 }

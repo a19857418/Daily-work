@@ -324,3 +324,21 @@ async function saveDB(){
 2. 是否只有單一門市使用，還是未來會有多分店、需要各分店資料是否要分開？
 3. 是否需要區分「誰能改成本／售價」「誰只能查詢」的權限，或目前門市內部互信、不需要分權限？
 4. 是否需要一開始就採用方案 B（正規化資料庫），還是接受先上方案 A 快速上線？
+
+## 14. 決策紀錄（2026-07-31）
+
+第 13 節四個問題已確認，實作依此進行，與本文件先前規劃有以下出入：
+
+| 問題 | 回答 | 實際採用 |
+|---|---|---|
+| Q1 部署位置 | 已有 GCP，未來要部署上去 | **Cloud Run + Cloud SQL for PostgreSQL**（見 `deploy/gcp-deploy.md`），本機開發也用 PostgreSQL 而非 SQLite |
+| Q2 單店或多店 | 單一門市 | 不需要分店隔離欄位，`settings_meta`／各資料表皆為單一份資料 |
+| Q3 是否需要權限區隔 | 需要 | 新增 JWT 帳號登入＋兩種角色：`admin`（讀寫）／`staff`（唯讀，寫入回傳 403） |
+| Q4 方案 A 或 B | **方案 B** | 直接跳過方案 A，落地為第 5.3 節的正規化 Schema（`vehicle_brands`/`vehicles`、`qs_*` 系列資料表），API 對前端仍以「整包 JSON 讀寫」呈現，降低前端改動幅度 |
+
+實際落地與第 5–6 節原規劃的差異：
+
+- 認證方式從「共用 API Key」改為「JWT 登入（`POST /api/auth/login`）＋ `Authorization: Bearer` header」，因為要支援多帳號、分角色。
+- API 資源路徑從 `/api/store/:appKey` 改為兩個明確資源 `/api/vehicle-catalog`、`/api/quote-settings`（其餘 `history`／`restore`／`import` 子路徑規則不變）。
+- `qs_discount_rules` 的主鍵從單一 `id` 改為複合鍵 `(mode, brand_id, id)`，因為規則 id 是前端隨機產生的字串，只保證同一廠商同一模式下不重複，不保證全域唯一。
+- 詳細環境變數、部署步驟見 `backend/README.md` 與 `deploy/gcp-deploy.md`；此文件（第 1–13 節）保留作為原始規劃紀錄，不逐段修改。

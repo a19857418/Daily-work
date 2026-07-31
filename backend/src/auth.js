@@ -1,13 +1,52 @@
-function requireApiKey(req, res, next) {
-  const configuredKey = process.env.API_KEY;
-  if (!configuredKey) {
-    return res.status(500).json({ error: '伺服器未設定 API_KEY，請聯絡管理員' });
-  }
-  const provided = req.get('X-Api-Key');
-  if (provided !== configuredKey) {
-    return res.status(401).json({ error: '未授權：API Key 錯誤或缺漏' });
-  }
-  next();
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const { pool } = require('./db');
+
+const TOKEN_TTL = process.env.TOKEN_TTL || '12h';
+
+async function verifyLogin(username, password) {
+  const res = await pool.query('SELECT id, username, password_hash, role FROM users WHERE username=$1', [username]);
+  const user = res.rows[0];
+  if (!user) return null;
+  const ok = await bcrypt.compare(password, user.password_hash);
+  if (!ok) return null;
+  return { id: user.id, username: user.username, role: user.role };
 }
 
-module.exports = { requireApiKey };
+function issueToken(user) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET 未設定');
+  return jwt.sign({ sub: user.id, username: user.username, role: user.role }, secret, { expiresIn: TOKEN_TTL });
+}
+
+// 任何已登入帳號（admin 或 staff）皆可通過，僅驗證身份
+function requireAuth(req, res, next) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    return res.status(500).json({ error: '伺服器未設定 JWT_SECRET，請聯絡管理員' });
+  }
+  const header = req.get('Authorization') || '';
+  const [scheme, token] = header.split(' ');
+  if (scheme !== 'Bearer' || !token) {
+    return res.status(401).json({ error: '未登入或憑證缺漏' });
+  }
+  try {
+    const payload = jwt.verify(token, secret);
+    req.user = { id: payload.sub, username: payload.username, role: payload.role };
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: '憑證無效或已過期，請重新登入' });
+  }
+}
+
+// 限定角色（例如只有 admin 能寫入設定）
+function requireRole(role) {
+  return (req, res, next) => {
+    if (!req.user || req.user.role !== role) {
+      return res.status(403).json({ error: `此操作需要「${role}」權限，目前帳號角色為「${req.user?.role || '未登入'}」` });
+    }
+    next();
+  };
+}
+
+module.exports = { verifyLogin, issueToken, requireAuth, requireRole };
