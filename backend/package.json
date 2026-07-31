@@ -1,0 +1,16 @@
+{
+  "name": "shop-settings-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "車款查詢工具 / 犀牛皮貼膜報價系統共用的後台設定資料庫 API（規劃規格書 Phase 1：Key-Value 儲存）",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
