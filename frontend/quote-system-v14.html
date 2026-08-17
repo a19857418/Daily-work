@@ -1076,7 +1076,7 @@ function renderLocalPage(){
         <label class="field">膜料廠商
           <select id="lcBrand">${DB.brandOrder.map(b=>`<option value="${b}" ${b===localState.brand?'selected':''}>${b}</option>`).join('')}</select>
         </label>
-        <label class="field">折扣規則（局部・${localState.brand}品牌）<span class="info-dot" data-tip="只有「迎風面」「天橋(屋頂)」這兩個部位有定額招攬獎金，其餘小部位可套用折扣售價，但沒有獎金">!</span>
+        <label class="field"><span style="display:inline-flex;align-items:center;">折扣規則（局部・${localState.brand}品牌）<span class="info-dot" data-tip="只有「迎風面」「天橋(屋頂)」這兩個部位有定額招攬獎金，其餘小部位可套用折扣售價，但沒有獎金">!</span></span>
           ${ruleSelectHtml('lcRule', rules, localState.ruleId)}
         </label>` : `
         <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${localState.brand}</div></div>
