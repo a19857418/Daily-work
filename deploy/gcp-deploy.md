@@ -105,7 +105,7 @@ curl https://shop-settings-api-xxxxxxxxxx-de.a.run.app/api/health
 
 ## 5. 前端指向正式後端
 
-把 `frontend/vehicle-lookup.html` 與 `frontend/quote-system-v14.html` 最上方的：
+把 `frontend/quote-system-v14.html` 最上方的：
 
 ```js
 const API_BASE = "http://localhost:4000/api";
@@ -117,7 +117,7 @@ const API_BASE = "http://localhost:4000/api";
 const API_BASE = "https://shop-settings-api-xxxxxxxxxx-de.a.run.app/api";
 ```
 
-兩個 HTML 檔案本身可以放在任何靜態網站託管（GCS 靜態網站、Firebase Hosting、Cloud Storage + 負載平衡器，或單純放公司內部網站伺服器）；它們只是純 HTML/JS，沒有伺服器端渲染需求。
+這個 HTML 檔案（現在是唯一的前端入口，內含常用系統首頁與貼膜報價系統）可以放在任何靜態網站託管（GCS 靜態網站、Firebase Hosting、Cloud Storage + 負載平衡器，或單純放公司內部網站伺服器）；它只是純 HTML/JS，沒有伺服器端渲染需求。
 
 ## 6. 之後更新程式碼
 
