@@ -547,6 +547,7 @@ async function importDBFromFile(file){
     ensureUsageStructure();
     ensureV14DataFill();
     ensureFullPriceBonusRule();
+    ensureDiscountBonusFix20260817();
     ensureOpCodes();
     await saveDB();
     toast('已匯入系統設定');
@@ -1766,6 +1767,20 @@ function ensureFullPriceBonusRule(){
   });
   DB.meta.fullPriceRuleAdded_1 = true;
 }
+// 2026-08-17：整台車折扣規則的預設獎金比例調整（8折 8%→5%、9折 15%→10%、原價(無折扣) 20%→15%）。
+// 只矯正「數值還停留在舊預設值」的規則，若已手動改成其他數字則不會被覆蓋；每次載入都會檢查，不用旗標。
+function ensureDiscountBonusFix20260817(){
+  DB.brandOrder.forEach(bn=>{
+    const list = DB.wholeCar.discountRules[bn];
+    if(!list) return;
+    list.forEach(r=>{
+      if(r.bonusType!=='percent') return;
+      if(r.name==='8折' && r.bonusValue===0.08) r.bonusValue = 0.05;
+      else if(r.name==='9折' && r.bonusValue===0.15) r.bonusValue = 0.10;
+      else if(r.name==='原價(無折扣)' && r.bonusValue===0.20) r.bonusValue = 0.15;
+    });
+  });
+}
 // 舊存檔沒有 opCodes 欄位時，補上出廠預設的三組OP代碼
 function ensureOpCodes(){
   if(!DB.opCodes){
@@ -2010,6 +2025,7 @@ document.getElementById('lockPill').onclick = ()=>{
   ensureUsageStructure();
   ensureV14DataFill();
   ensureFullPriceBonusRule();
+  ensureDiscountBonusFix20260817();
   ensureOpCodes();
   // 只有資料真的被這些一次性遷移函式改過、且目前是解鎖狀態時才寫回後端；
   // 一般訪客（未解鎖）仍會在本次瀏覽階段套用這些修正值，只是不會嘗試寫入後端
