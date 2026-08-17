@@ -692,19 +692,19 @@ function opCodeBlockHtml(lines){
           <label class="field no-print" style="max-width:220px;margin-top:6px;margin-left:2px;">自填最終規格
             <input type="text" class="cell-input op-manual-input" style="text-align:left;" placeholder="例如：2080-G363" value="${l.manualText}" data-opline-id="${l.rowId}">
           </label>
-          <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:12px;margin-left:2px;">
-            <div class="no-print">
-              <div class="panel-sub" style="margin-bottom:5px;">帳務歸屬</div>
-              <div class="pill-tabs" style="margin-bottom:0;">
-                ${ACCOUNT_TYPE_OPTIONS.map(v=>`<button class="${l.accountType===v?'active':''}" data-account-type="${v}" data-row-target="${l.rowId}">${v}</button>`).join('')}
-              </div>
-            </div>
-            <div class="no-print">
-              <div class="panel-sub" style="margin-bottom:5px;">付款對象</div>
-              <div class="pill-tabs" style="margin-bottom:0;">
-                ${PAYMENT_TARGET_OPTIONS.map(v=>`<button class="${l.paymentTarget===v?'active':''}" data-payment-target="${v}" data-row-target="${l.rowId}">${v}</button>`).join('')}
-              </div>
-            </div>
+          <div class="no-print" style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;margin-left:2px;">
+            <label class="field">帳務歸屬
+              <select data-account-type-select data-row-target="${l.rowId}">
+                <option value="">請選擇</option>
+                ${ACCOUNT_TYPE_OPTIONS.map(v=>`<option value="${v}" ${l.accountType===v?'selected':''}>${v}</option>`).join('')}
+              </select>
+            </label>
+            <label class="field">付款對象
+              <select data-payment-target-select data-row-target="${l.rowId}">
+                <option value="">請選擇</option>
+                ${PAYMENT_TARGET_OPTIONS.map(v=>`<option value="${v}" ${l.paymentTarget===v?'selected':''}>${v}</option>`).join('')}
+              </select>
+            </label>
           </div>
           <div class="mono" style="margin-top:10px;margin-left:2px;">
             帳務：${l.accountType || '<span class="placeholder-val">未選擇</span>'}　付款對象：${l.paymentTarget || '<span class="placeholder-val">未選擇</span>'}
@@ -719,24 +719,22 @@ function opCodeBlockHtml(lines){
     </div>
   `;
 }
-// 內部資訊區塊裡「帳務歸屬」「付款對象」按鈕的共用事件綁定（wrap 內含 opCodeBlockHtml 輸出）；
+// 內部資訊區塊裡「帳務歸屬」「付款對象」下拉選單的共用事件綁定（wrap 內含 opCodeBlockHtml 輸出）；
 // findState(rowId) 回傳該行對應的可寫入狀態物件（wholeCarState 或某一列 local row），rerender 為重繪呼叫
 function bindOpInfoButtons(wrap, findState, rerender){
-  wrap.querySelectorAll('[data-account-type]').forEach(btn=>{
-    btn.onclick = ()=>{
-      const state = findState(btn.dataset.rowTarget);
+  wrap.querySelectorAll('[data-account-type-select]').forEach(sel=>{
+    sel.onchange = ()=>{
+      const state = findState(sel.dataset.rowTarget);
       if(!state) return;
-      const v = btn.dataset.accountType;
-      state.accountType = state.accountType===v ? null : v;
+      state.accountType = sel.value || null;
       rerender();
     };
   });
-  wrap.querySelectorAll('[data-payment-target]').forEach(btn=>{
-    btn.onclick = ()=>{
-      const state = findState(btn.dataset.rowTarget);
+  wrap.querySelectorAll('[data-payment-target-select]').forEach(sel=>{
+    sel.onchange = ()=>{
+      const state = findState(sel.dataset.rowTarget);
       if(!state) return;
-      const v = btn.dataset.paymentTarget;
-      state.paymentTarget = state.paymentTarget===v ? null : v;
+      state.paymentTarget = sel.value || null;
       rerender();
     };
   });
