@@ -151,7 +151,8 @@
   .price-sub{margin-top:3px;font-size:10.5px;color:var(--text-faint);}
   .price-sub-row{margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:4px;}
   .price-sub-label{font-size:10.5px;color:var(--text-dim);}
-  input.price-sub-input{width:78px;font-size:11px;color:var(--text-faint);padding:2px 6px;background:rgba(255,255,255,.05);border:none;border-radius:4px;box-shadow:none;}
+  input.price-sub-input{width:70px;font-size:10.5px;color:var(--text-faint);text-align:right;padding:0;margin:0;background:transparent;border:none;border-radius:0;box-shadow:none;}
+  input.price-sub-input:hover, input.price-sub-input:focus{background:rgba(255,255,255,.06);border:none;box-shadow:none;}
 
   .setting-row{
     display:grid;grid-template-columns:1.4fr 130px 60px;gap:14px;align-items:center;
@@ -339,7 +340,8 @@ function defaultDiscountRules(kind){
   return [
     {id:'d'+Math.random().toString(36).slice(2,8), name:'75折', rate:0.75, bonusType:'fixed', bonusValue:2000},
     {id:'d'+Math.random().toString(36).slice(2,8), name:'8折',  rate:0.80, bonusType:'fixed', bonusValue:3000},
-    {id:'d'+Math.random().toString(36).slice(2,8), name:'9折',  rate:0.90, bonusType:'fixed', bonusValue:5000}
+    {id:'d'+Math.random().toString(36).slice(2,8), name:'9折',  rate:0.90, bonusType:'fixed', bonusValue:5000},
+    {id:'d'+Math.random().toString(36).slice(2,8), name:'原價(無折扣)', rate:1.00, bonusType:'fixed', bonusValue:6000}
   ];
 }
 
@@ -584,6 +586,7 @@ async function importDBFromFile(file){
     ensureUsageStructure();
     ensureV14DataFill();
     ensureFullPriceBonusRule();
+    ensureLocalFullPriceRule();
     ensureDiscountBonusFix20260817();
     ensurePartsRatioDefault();
     ensureOpCodes();
@@ -729,14 +732,12 @@ function opCodeBlockHtml(lines){
         const laborAmt = l.exclTax!=null ? (l.exclTax - partsAmt) : null; // 兩者相加=業務/接待售價，避免四捨五入誤差對不上
         return `
         <div style="margin-bottom:16px;">
-          <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <span class="panel-sub" style="margin:0;white-space:nowrap;">施工代碼(OP code)</span>
             <span class="tag tag-amber">${l.code}</span>
             <span class="op-copy-text mono" data-opline-text="${l.rowId}" style="text-align:left;font-weight:700;color:var(--amber);">${fullLine}</span>
+            <input type="text" class="cell-input op-manual-input no-print" style="text-align:left;width:190px;font-weight:700;color:var(--amber);background:rgba(224,166,61,.1);border:1px solid var(--amber-dim);border-radius:6px;" placeholder="✎ 自填最終規格，例如：2080-G363" value="${l.manualText}" data-opline-id="${l.rowId}">
           </div>
-          <label class="field no-print" style="max-width:220px;margin-top:6px;margin-left:2px;">自填最終規格
-            <input type="text" class="cell-input op-manual-input" style="text-align:left;" placeholder="例如：2080-G363" value="${l.manualText}" data-opline-id="${l.rowId}">
-          </label>
           <div class="no-print" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-top:12px;margin-left:2px;">
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="panel-sub" style="margin:0;white-space:nowrap;">帳務歸屬</span>
@@ -784,6 +785,48 @@ function bindOpInfoButtons(wrap, findState, rerender){
       state.paymentTarget = sel.value || null;
       rerender();
     };
+  });
+}
+
+// 列印前防呆：檢查必填欄位（車型/廠商/規格/折扣規則 + 自填最終規格/帳務歸屬/付款對象）是否都已填寫，
+// 回傳缺漏欄位的文字說明陣列；空陣列代表可以列印
+function validateWholeCarBeforePrint(){
+  const missing = [];
+  if(!wholeCarState.group) missing.push('車型群組');
+  if(!wholeCarState.brand) missing.push('膜料廠商');
+  if(!wholeCarState.category) missing.push('產品類別');
+  if(!wholeCarState.material) missing.push('規格');
+  const rules = DB.wholeCar.discountRules[wholeCarState.brand] || [];
+  if(!rules.find(r=>r.id===wholeCarState.ruleId)) missing.push('折扣規則');
+  if(!wholeCarState.opManual || !wholeCarState.opManual.trim()) missing.push('自填最終規格');
+  if(!wholeCarState.accountType) missing.push('帳務歸屬');
+  if(!wholeCarState.paymentTarget) missing.push('付款對象');
+  return missing;
+}
+function validateLocalBeforePrint(){
+  const missing = [];
+  if(!localState.brand) missing.push('膜料廠商');
+  const rules = DB.local.discountRules[localState.brand] || [];
+  if(!rules.find(r=>r.id===localState.ruleId)) missing.push('折扣規則');
+  const brandObj = DB.brands[localState.brand];
+  localState.rows.forEach((row,idx)=>{
+    const label = `第${idx+1}列（${row.part||'未命名部位'}）`;
+    const matOptions = brandObj?.categories?.[row.category]?.materialOrder || [];
+    if(!row.material || !matOptions.includes(row.material)) missing.push(`${label}規格`);
+    if(!row.opManual || !row.opManual.trim()) missing.push(`${label}自填最終規格`);
+    if(!row.accountType) missing.push(`${label}帳務歸屬`);
+    if(!row.paymentTarget) missing.push(`${label}付款對象`);
+  });
+  return missing;
+}
+function showMissingFieldsModal(missing){
+  openModal('列印前請先完整填寫', (body)=>{
+    body.innerHTML = `
+      <div style="margin-bottom:10px;color:var(--text-dim);font-size:13px;">以下欄位尚未填寫，請完成後再列印/PDF：</div>
+      <ul style="margin:0;padding-left:20px;line-height:1.9;color:var(--amber);">
+        ${missing.map(m=>`<li>${m}</li>`).join('')}
+      </ul>
+    `;
   });
 }
 
@@ -876,7 +919,11 @@ function renderWholeCarPage(){
 
   document.getElementById('wcInternal').onclick=()=>{wholeCarState.view='internal';renderWholeCarPage();};
   document.getElementById('wcExternal').onclick=()=>{wholeCarState.view='external';renderWholeCarPage();};
-  document.getElementById('wcPrint').onclick=()=>window.print();
+  document.getElementById('wcPrint').onclick=()=>{
+    const missing = validateWholeCarBeforePrint();
+    if(missing.length){ showMissingFieldsModal(missing); return; }
+    window.print();
+  };
   const wcGroupSel = document.getElementById('wcGroup');
   if(wcGroupSel) wcGroupSel.onchange=e=>{wholeCarState.group=e.target.value;renderWholeCarPage();};
   const wcBrandSel = document.getElementById('wcBrand');
@@ -932,11 +979,13 @@ function renderWholeCarResult(){
   const opLine = buildOpCodeLine({scope:'wholecar', group, brand, category, material, rowId:'wc', manualText:wholeCarState.opManual, exclTax:line.exclTax, accountType:wholeCarState.accountType, paymentTarget:wholeCarState.paymentTarget});
 
   const priceLabel = rule?.name ? `${rule.name}售價` : '業務/接待售價';
+  // 選「原價(無折扣)」時，折扣售價欄跟表定售價欄數字會完全一樣，此欄直接隱藏避免重複
+  const isFullPrice = rule && rule.rate === 1;
 
   wrap.innerHTML = `
     <div class="table-scroll">
     <table class="data">
-      <tr><th>部位</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th></tr>
+      <tr><th>部位</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價</th>${isFullPrice?'':`<th>${priceLabel}</th>`}<th>售服毛利</th><th>毛利率</th></tr>
       <tr>
         <td>全車</td>
         <td>${usage!=null?usage:'<span class="placeholder-val">未輸入</span>'}</td>
@@ -944,20 +993,21 @@ function renderWholeCarResult(){
         <td>${costInfo.value!=null?`<span class="val-teal">${fmt(costInfo.value)}</span><span class="info-dot" data-tip="${costInfo.note}">i</span>`:'<span class="placeholder-val">尚未輸入</span>'}</td>
         <td>${line.laborCost!=null?fmt(line.laborCost):'<span class="placeholder-val">—</span>'}</td>
         <td>${installBonusVal!=null?fmt(installBonusVal):'<span class="placeholder-val">未設定</span>'}</td>
-        <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${ov.bonus!=null?formatMoney(ov.bonus):''}" data-ov="${key}" data-field="bonus"></td>
+        <td><input class="cell-input" style="width:74px;" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${ov.bonus!=null?formatMoney(ov.bonus):''}" data-ov="${key}" data-field="bonus"></td>
         <td>
           ${listPrice!=null?`
           <div class="mono price-main">${fmt(listPrice)}</div>
           <div class="price-sub">未稅 ${fmt(listPrice/TAX_RATE_DIVISOR())}</div>
           `:'<span class="placeholder-val">尚未輸入</span>'}
         </td>
+        ${isFullPrice?'':`
         <td>
           <div class="mono price-main">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
           <div class="price-sub-row">
             <span class="price-sub-label">未稅</span>
             <input class="cell-input price-sub-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&ov.businessPrice==null?formatMoney(Math.round(line.exclTax)):''}" value="${ov.businessPrice!=null?formatMoney(ov.businessPrice):''}" data-ov="${key}" data-field="businessPrice">
           </div>
-        </td>
+        </td>`}
         <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
         <td>${line.profitRate!=null?`${Math.round(line.profitRate*100)}%`:'<span class="placeholder-val">—</span>'}</td>
       </tr>
@@ -1043,7 +1093,11 @@ function renderLocalPage(){
 
   document.getElementById('lcInternal').onclick=()=>{localState.view='internal';renderLocalPage();};
   document.getElementById('lcExternal').onclick=()=>{localState.view='external';renderLocalPage();};
-  document.getElementById('lcPrintBtn').onclick=()=>window.print();
+  document.getElementById('lcPrintBtn').onclick=()=>{
+    const missing = validateLocalBeforePrint();
+    if(missing.length){ showMissingFieldsModal(missing); return; }
+    window.print();
+  };
   const lcBrandSel = document.getElementById('lcBrand');
   if(lcBrandSel) lcBrandSel.onchange = e=>{
     localState.brand=e.target.value; localState.ruleId=null;
@@ -1083,6 +1137,8 @@ function renderLocalTable(){
   let totals = {materialCost:0, laborCost:0, installBonus:0, listPrice:0, inclTax:0, exclTax:0, bonus:0, profit:0};
   let any = {materialCost:false, exclTax:false};
   const opLines = [];
+  // 選「原價(無折扣)」時，折扣售價欄跟表定售價欄數字會完全一樣，此欄直接隱藏避免重複
+  const isFullPrice = rule && rule.rate === 1;
 
   const rows = localState.rows.map(row=>{
     const partData = DB.local.parts[row.part] || {usage:null,hours:null};
@@ -1131,20 +1187,21 @@ function renderLocalTable(){
       <td>${costInfo.value!=null?`<span class="val-teal">${fmt(costInfo.value)}</span><span class="info-dot" data-tip="${costInfo.note}">i</span>`:'<span class="placeholder-val">尚未輸入</span>'}</td>
       <td>${line.laborCost!=null?fmt(line.laborCost):'<span class="placeholder-val">—</span>'}</td>
       <td>${installBonusVal!=null?fmt(installBonusVal):'<span class="placeholder-val">未設定</span>'}</td>
-      <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${row.bonusOverride!=null?formatMoney(row.bonusOverride):''}" data-ov-row="${row.id}" data-ov-field="bonusOverride"></td>
+      <td><input class="cell-input" style="width:74px;" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${row.bonusOverride!=null?formatMoney(row.bonusOverride):''}" data-ov-row="${row.id}" data-ov-field="bonusOverride"></td>
       <td>
         ${listPrice!=null?`
         <div class="mono price-main">${fmt(listPrice)}</div>
         <div class="price-sub">未稅 ${fmt(listPrice/TAX_RATE_DIVISOR())}</div>
         `:'<span class="placeholder-val">尚未輸入</span>'}
       </td>
+      ${isFullPrice?'':`
       <td>
         <div class="mono price-main">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
         <div class="price-sub-row">
           <span class="price-sub-label">未稅</span>
           <input class="cell-input price-sub-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&row.bizOverride==null?formatMoney(Math.round(line.exclTax)):''}" value="${row.bizOverride!=null?formatMoney(row.bizOverride):''}" data-ov-row="${row.id}" data-ov-field="bizOverride">
         </div>
-      </td>
+      </td>`}
       <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
       <td>${line.profitRate!=null?`${Math.round(line.profitRate*100)}%`:'<span class="placeholder-val">—</span>'}</td>
       <td><button class="btn sm danger no-print" data-del-row="${row.id}">刪除</button></td>
@@ -1155,12 +1212,12 @@ function renderLocalTable(){
 
   const head = view==='external'
     ? `<tr><th>部位</th><th>材質名稱</th><th>未稅售價</th><th>含稅售價</th></tr>`
-    : `<tr><th>部位</th><th>類別</th><th>規格</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th><th></th></tr>`;
+    : `<tr><th>部位</th><th>類別</th><th>規格</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價</th>${isFullPrice?'':`<th>${priceLabel}</th>`}<th>售服毛利</th><th>毛利率</th><th></th></tr>`;
 
   const totalRate = (totals.profit && totals.exclTax) ? totals.profit/totals.exclTax : null;
   const totalRow = view==='external'
     ? `<tr class="total-row"><td>合計</td><td></td><td>${any.exclTax?fmt(totals.exclTax):'—'}</td><td>${totals.inclTax?fmt(totals.inclTax):'—'}</td></tr>`
-    : `<tr class="total-row"><td>合計</td><td></td><td></td><td></td><td></td><td>${any.materialCost?fmt(totals.materialCost):'—'}</td><td>${fmt(totals.laborCost)||'—'}</td><td>${fmt(totals.installBonus)||'—'}</td><td>${fmt(totals.bonus)||'—'}</td><td>${fmt(totals.listPrice)||'—'}</td><td>${fmt(totals.inclTax)||'—'}</td><td>${fmt(totals.profit)||'—'}</td><td>${totalRate!=null?Math.round(totalRate*100)+'%':'—'}</td><td></td></tr>`;
+    : `<tr class="total-row"><td>合計</td><td></td><td></td><td></td><td></td><td>${any.materialCost?fmt(totals.materialCost):'—'}</td><td>${fmt(totals.laborCost)||'—'}</td><td>${fmt(totals.installBonus)||'—'}</td><td>${fmt(totals.bonus)||'—'}</td><td>${fmt(totals.listPrice)||'—'}</td>${isFullPrice?'':`<td>${fmt(totals.inclTax)||'—'}</td>`}<td>${fmt(totals.profit)||'—'}</td><td>${totalRate!=null?Math.round(totalRate*100)+'%':'—'}</td><td></td></tr>`;
 
   const dateLine = view==='external' ? `<div class="panel-sub" style="margin-bottom:10px;">日期：${localState.date} ｜ 客戶車款：${localState.customerModel || '<span class="placeholder-val">（未填寫）</span>'}</div>` : '';
 
@@ -1912,6 +1969,18 @@ function ensureFullPriceBonusRule(){
   });
   DB.meta.fullPriceRuleAdded_1 = true;
 }
+// 新增「原價(無折扣)」局部貼膜折扣規則(rate=100%,獎金定值6,000元)，回填給已存在的品牌
+function ensureLocalFullPriceRule(){
+  DB.meta = DB.meta || {};
+  if(DB.meta.localFullPriceRuleAdded_1) return;
+  DB.brandOrder.forEach(bn=>{
+    const list = DB.local.discountRules[bn];
+    if(list && !list.some(r=>r.rate===1)){
+      list.push({id:'d'+Date.now()+Math.random().toString(36).slice(2,6), name:'原價(無折扣)', rate:1.00, bonusType:'fixed', bonusValue:6000});
+    }
+  });
+  DB.meta.localFullPriceRuleAdded_1 = true;
+}
 // 2026-08-17：整台車折扣規則的預設獎金比例調整（8折 8%→5%、9折 15%→10%、原價(無折扣) 20%→15%）。
 // 只矯正「數值還停留在舊預設值」的規則，若已手動改成其他數字則不會被覆蓋；每次載入都會檢查，不用旗標。
 function ensureDiscountBonusFix20260817(){
@@ -2235,6 +2304,7 @@ document.getElementById('lockPill').onclick = ()=>{
   ensureUsageStructure();
   ensureV14DataFill();
   ensureFullPriceBonusRule();
+  ensureLocalFullPriceRule();
   ensureDiscountBonusFix20260817();
   ensurePartsRatioDefault();
   ensureOpCodes();
