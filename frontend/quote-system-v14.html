@@ -295,9 +295,9 @@ function defaultDiscountRules(kind){
   if(kind==='whole'){
     return [
       {id:'d'+Math.random().toString(36).slice(2,8), name:'75折', rate:0.75, bonusType:'fixed', bonusValue:3000},
-      {id:'d'+Math.random().toString(36).slice(2,8), name:'8折',  rate:0.80, bonusType:'percent', bonusValue:0.08},
-      {id:'d'+Math.random().toString(36).slice(2,8), name:'9折',  rate:0.90, bonusType:'percent', bonusValue:0.15},
-      {id:'d'+Math.random().toString(36).slice(2,8), name:'原價(無折扣)', rate:1.00, bonusType:'percent', bonusValue:0.20}
+      {id:'d'+Math.random().toString(36).slice(2,8), name:'8折',  rate:0.80, bonusType:'percent', bonusValue:0.05},
+      {id:'d'+Math.random().toString(36).slice(2,8), name:'9折',  rate:0.90, bonusType:'percent', bonusValue:0.10},
+      {id:'d'+Math.random().toString(36).slice(2,8), name:'原價(無折扣)', rate:1.00, bonusType:'percent', bonusValue:0.15}
     ];
   }
   return [
@@ -1754,14 +1754,14 @@ function ensureV14DataFill(){
 
   DB.meta.dataFillApplied_1 = true;
 }
-// 新增「原價(無折扣)」整台車折扣規則(rate=100%,獎金比例20%)，回填給已存在的品牌
+// 新增「原價(無折扣)」整台車折扣規則(rate=100%,獎金比例15%)，回填給已存在的品牌
 function ensureFullPriceBonusRule(){
   DB.meta = DB.meta || {};
   if(DB.meta.fullPriceRuleAdded_1) return;
   DB.brandOrder.forEach(bn=>{
     const list = DB.wholeCar.discountRules[bn];
     if(list && !list.some(r=>r.rate===1)){
-      list.push({id:'d'+Date.now()+Math.random().toString(36).slice(2,6), name:'原價(無折扣)', rate:1.00, bonusType:'percent', bonusValue:0.20});
+      list.push({id:'d'+Date.now()+Math.random().toString(36).slice(2,6), name:'原價(無折扣)', rate:1.00, bonusType:'percent', bonusValue:0.15});
     }
   });
   DB.meta.fullPriceRuleAdded_1 = true;
