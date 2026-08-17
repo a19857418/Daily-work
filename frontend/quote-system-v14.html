@@ -659,36 +659,87 @@ function getOpCodeForPart(part){
   if(oc.localSpecific.parts.includes(part)) return oc.localSpecific;
   return oc.localOther;
 }
+// 零件／工資拆分比例：依業務/接待售價(未稅)拆分，供交接零件與接待人員使用（零件30%／工資70%）
+const PARTS_LABOR_SPLIT = { parts: 0.3, labor: 0.7 };
+const ACCOUNT_TYPE_OPTIONS = ['內帳','自費'];
+const PAYMENT_TARGET_OPTIONS = ['售服','新車','BoxBox來店客'];
+
 // scope='wholecar'|'local'; rowId identifies which manual-text input this line binds to
-function buildOpCodeLine({scope, group, part, brand, category, material, rowId, manualText}){
+function buildOpCodeLine({scope, group, part, brand, category, material, rowId, manualText, exclTax, accountType, paymentTarget}){
   const opCode = scope==='wholecar' ? DB.opCodes.wholeCar : getOpCodeForPart(part);
   const prefix = scope==='wholecar' ? `${group} 全車` : part;
-  return { code: opCode.code, prefix, brand, category, material, rowId, manualText: manualText||'' };
+  return { code: opCode.code, prefix, brand, category, material, rowId, manualText: manualText||'', exclTax: exclTax??null, accountType: accountType||null, paymentTarget: paymentTarget||null };
 }
 function opLineFullText(l){
   return `${l.prefix} ${l.brand}-${l.category} ${l.material}${l.manualText?(' '+l.manualText):''}`;
 }
-function opCodeBlockHtml(lines, editable){
+// 內部資訊區塊：僅供對內版使用（客戶對外版不會顯示）。含施工代碼、帳務歸屬/付款對象、零件工資拆分
+function opCodeBlockHtml(lines){
   if(!lines.length) return '';
   return `
-    <div class="panel-sub" style="margin:16px 0 6px;">施工代碼（OP Code）</div>
+    <div class="panel-sub" style="margin:16px 0 6px;">內部資訊</div>
     <div class="subtle-panel" style="padding:12px 14px;">
       ${lines.map(l=>{
         const fullLine = opLineFullText(l);
+        const partsAmt = l.exclTax!=null ? Math.round(l.exclTax*PARTS_LABOR_SPLIT.parts) : null;
+        const laborAmt = l.exclTax!=null ? (l.exclTax - partsAmt) : null; // 兩者相加=業務/接待售價，避免四捨五入誤差對不上
         return `
-        <div style="margin-bottom:${editable?'12':'8'}px;">
+        <div style="margin-bottom:16px;">
           <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;">
             <span class="tag tag-amber">${l.code}</span>
             <span class="op-copy-text mono" data-opline-text="${l.rowId}" style="text-align:left;font-weight:700;color:var(--amber);">${fullLine}</span>
           </div>
-          ${editable ? `
           <label class="field no-print" style="max-width:220px;margin-top:6px;margin-left:2px;">自填最終規格
             <input type="text" class="cell-input op-manual-input" style="text-align:left;" placeholder="例如：2080-G363" value="${l.manualText}" data-opline-id="${l.rowId}">
-          </label>` : ''}
+          </label>
+          <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:12px;margin-left:2px;">
+            <div class="no-print">
+              <div class="panel-sub" style="margin-bottom:5px;">帳務歸屬</div>
+              <div class="pill-tabs" style="margin-bottom:0;">
+                ${ACCOUNT_TYPE_OPTIONS.map(v=>`<button class="${l.accountType===v?'active':''}" data-account-type="${v}" data-row-target="${l.rowId}">${v}</button>`).join('')}
+              </div>
+            </div>
+            <div class="no-print">
+              <div class="panel-sub" style="margin-bottom:5px;">付款對象</div>
+              <div class="pill-tabs" style="margin-bottom:0;">
+                ${PAYMENT_TARGET_OPTIONS.map(v=>`<button class="${l.paymentTarget===v?'active':''}" data-payment-target="${v}" data-row-target="${l.rowId}">${v}</button>`).join('')}
+              </div>
+            </div>
+          </div>
+          <div class="mono" style="margin-top:10px;margin-left:2px;">
+            帳務：${l.accountType || '<span class="placeholder-val">未選擇</span>'}　付款對象：${l.paymentTarget || '<span class="placeholder-val">未選擇</span>'}
+          </div>
+          ${l.exclTax!=null ? `
+          <div class="panel-sub" style="margin-top:10px;margin-left:2px;">零件／工資拆分（依業務/接待售價未稅金額 ${Math.round(PARTS_LABOR_SPLIT.parts*100)}%／${Math.round(PARTS_LABOR_SPLIT.labor*100)}% 拆分，交接零件與接待人員依此金額登打工單）</div>
+          <div class="mono" style="margin-top:2px;margin-left:2px;">
+            零件　<span class="val-teal" style="font-weight:700;">${fmt(partsAmt)}</span>　　工資　<span class="val-amber" style="font-weight:700;">${fmt(laborAmt)}</span>
+          </div>` : ''}
         </div>
       `;}).join('')}
     </div>
   `;
+}
+// 內部資訊區塊裡「帳務歸屬」「付款對象」按鈕的共用事件綁定（wrap 內含 opCodeBlockHtml 輸出）；
+// findState(rowId) 回傳該行對應的可寫入狀態物件（wholeCarState 或某一列 local row），rerender 為重繪呼叫
+function bindOpInfoButtons(wrap, findState, rerender){
+  wrap.querySelectorAll('[data-account-type]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const state = findState(btn.dataset.rowTarget);
+      if(!state) return;
+      const v = btn.dataset.accountType;
+      state.accountType = state.accountType===v ? null : v;
+      rerender();
+    };
+  });
+  wrap.querySelectorAll('[data-payment-target]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const state = findState(btn.dataset.rowTarget);
+      if(!state) return;
+      const v = btn.dataset.paymentTarget;
+      state.paymentTarget = state.paymentTarget===v ? null : v;
+      rerender();
+    };
+  });
 }
 
 /* =========================================================
@@ -704,7 +755,7 @@ function ruleSelectHtml(id, rules, selectedId){
 /* =========================================================
    整台車報價 頁
    ========================================================= */
-let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null, opManual:'' };
+let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null, opManual:'', accountType:null, paymentTarget:null };
 
 function ensureBrandCategoryMaterial(state){
   state.brand = state.brand && DB.brandOrder.includes(state.brand) ? state.brand : DB.brandOrder[0];
@@ -817,8 +868,6 @@ function renderWholeCarResult(){
   const ov = DB.overrides[key] || {};
   const line = computeLine({listPrice, materialCost:costInfo.value, hours, installBonusVal, discountRule:rule, override:ov});
 
-  const opLine = buildOpCodeLine({scope:'wholecar', group, brand, category, material, rowId:'wc', manualText:wholeCarState.opManual});
-
   if(view==='external'){
     wrap.innerHTML = `
       <div class="panel-sub" style="margin-bottom:10px;">日期：${wholeCarState.date} ｜ 客戶車款：${wholeCarState.customerModel || '<span class="placeholder-val">（未填寫）</span>'}</div>
@@ -831,10 +880,11 @@ function renderWholeCarResult(){
           <td>${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">尚未輸入</span>'}</td>
         </tr>
       </table>
-      ${opCodeBlockHtml([opLine], false)}
     `;
     return;
   }
+
+  const opLine = buildOpCodeLine({scope:'wholecar', group, brand, category, material, rowId:'wc', manualText:wholeCarState.opManual, exclTax:line.exclTax, accountType:wholeCarState.accountType, paymentTarget:wholeCarState.paymentTarget});
 
   wrap.innerHTML = `
     <div class="table-scroll">
@@ -855,7 +905,7 @@ function renderWholeCarResult(){
       </tr>
     </table>
     </div>
-    ${opCodeBlockHtml([opLine], true)}
+    ${opCodeBlockHtml([opLine])}
   `;
   wrap.querySelectorAll('input[data-ov]').forEach(inp=>{
     inp.onchange = async ()=>{
@@ -865,6 +915,7 @@ function renderWholeCarResult(){
       await saveDB(); renderWholeCarResult();
     };
   });
+  bindOpInfoButtons(wrap, ()=>wholeCarState, renderWholeCarResult);
   wrap.querySelectorAll('[data-opline-id]').forEach(inp=>{
     inp.oninput = ()=>{
       wholeCarState.opManual = inp.value;
@@ -883,7 +934,7 @@ function localAddRow(part){
   const brandObj = DB.brands[localState.brand];
   const cat = CATEGORY_LIST.find(c=>brandObj.categories[c].materialOrder.length>0) || CATEGORY_LIST[0];
   const material = brandObj.categories[cat].materialOrder[0] || '';
-  localState.rows.push({ id:'row'+Date.now()+Math.random().toString(36).slice(2,6), part: part||DB.partOrder[0], category:cat, material, bizOverride:null, bonusOverride:null, opManual:'' });
+  localState.rows.push({ id:'row'+Date.now()+Math.random().toString(36).slice(2,6), part: part||DB.partOrder[0], category:cat, material, bizOverride:null, bonusOverride:null, opManual:'', accountType:null, paymentTarget:null });
 }
 
 function renderLocalPage(){
@@ -973,7 +1024,7 @@ function renderLocalTable(){
 
   let totals = {materialCost:0, laborCost:0, installBonus:0, inclTax:0, exclTax:0, bonus:0, profit:0};
   let any = {materialCost:false, exclTax:false};
-  const opLines = localState.rows.map(row=>buildOpCodeLine({scope:'local', part:row.part, brand, category:row.category, material:row.material, rowId:row.id, manualText:row.opManual}));
+  const opLines = [];
 
   const rows = localState.rows.map(row=>{
     const partData = DB.local.parts[row.part] || {usage:null,hours:null};
@@ -983,6 +1034,10 @@ function renderLocalTable(){
     const key = 'localrow_'+row.id;
     const ov = { businessPrice: row.bizOverride, bonus: row.bonusOverride };
     const line = computeLine({listPrice, materialCost:costInfo.value, hours:partData.hours, installBonusVal, discountRule:rule, override:ov});
+
+    if(view==='internal'){
+      opLines.push(buildOpCodeLine({scope:'local', part:row.part, brand, category:row.category, material:row.material, rowId:row.id, manualText:row.opManual, exclTax:line.exclTax, accountType:row.accountType, paymentTarget:row.paymentTarget}));
+    }
 
     if(costInfo.value!=null){ totals.materialCost+=costInfo.value; any.materialCost=true; }
     if(line.laborCost!=null) totals.laborCost+=line.laborCost;
@@ -1037,8 +1092,9 @@ function renderLocalTable(){
 
   const dateLine = view==='external' ? `<div class="panel-sub" style="margin-bottom:10px;">日期：${localState.date} ｜ 客戶車款：${localState.customerModel || '<span class="placeholder-val">（未填寫）</span>'}</div>` : '';
 
-  wrap.innerHTML = `${dateLine}<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>${opCodeBlockHtml(opLines, view==='internal')}`;
+  wrap.innerHTML = `${dateLine}<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>${view==='internal'?opCodeBlockHtml(opLines):''}`;
 
+  bindOpInfoButtons(wrap, (rowId)=>localState.rows.find(r=>r.id===rowId), renderLocalTable);
   wrap.querySelectorAll('[data-opline-id]').forEach(inp=>{
     inp.oninput = ()=>{
       const row = localState.rows.find(r=>r.id===inp.dataset.oplineId);
