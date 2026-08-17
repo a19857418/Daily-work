@@ -325,6 +325,8 @@
    ========================================================= */
 const PART_ORDER_DEFAULT = ["迎風面","天橋(屋頂)","後視鏡(2個)","大燈(2個)","尾燈(2個)","水箱護罩(外一圈)","四門外把手(改色)","左側裙(單支)","右側裙(單支)"];
 const CATEGORY_LIST = ["犀牛皮類","改色膜類"];
+// 局部貼膜：只有這兩個部位有施工獎金／招攬獎金；其餘小部位仍可設定折扣售價，但沒有獎金
+const BONUS_ELIGIBLE_PARTS = ["迎風面","天橋(屋頂)"];
 const TAX_RATE = 0.05;
 
 function defaultDiscountRules(kind){
@@ -665,7 +667,8 @@ function getMaterialCost(brand, category, materialName, usage, mode){
 }
 
 // 統一的報價行計算：輸入 表定售價(含稅)/材料成本/工時/施工獎金定值/折扣規則 -> 輸出全部欄位
-function computeLine({listPrice, materialCost, hours, installBonusVal, discountRule, override}){
+// bonusEligible=false 時（局部貼膜的小部位）完全不計算招攬獎金，折扣售價本身仍照常計算
+function computeLine({listPrice, materialCost, hours, installBonusVal, discountRule, override, bonusEligible=true}){
   const laborCost = (hours!=null) ? hours*DB.hourlyWage : null;
   const inclTaxList = (listPrice!=null && discountRule) ? listPrice*discountRule.rate : null;
   const exclTaxRaw = inclTaxList!=null ? inclTaxList/TAX_RATE_DIVISOR() : null;
@@ -676,10 +679,10 @@ function computeLine({listPrice, materialCost, hours, installBonusVal, discountR
   const inclTax = exclTax!=null ? exclTax*TAX_RATE_DIVISOR() : null;
 
   let bonusDefault = null;
-  if(exclTax!=null && discountRule){
+  if(exclTax!=null && discountRule && bonusEligible){
     bonusDefault = discountRule.bonusType==='fixed' ? discountRule.bonusValue : exclTax*discountRule.bonusValue;
   }
-  const bonus = ov.bonus!=null ? ov.bonus : bonusDefault;
+  const bonus = bonusEligible ? (ov.bonus!=null ? ov.bonus : bonusDefault) : null;
 
   let profit = null;
   if(exclTax!=null && materialCost!=null && laborCost!=null && installBonusVal!=null && bonus!=null){
@@ -1144,9 +1147,10 @@ function renderLocalTable(){
     const listPrice = DB.local.price[row.part]?.[brand]?.[row.category];
     const costInfo = getMaterialCost(brand, row.category, row.material, partData.usage, 'local');
     const installBonusVal = DB.installBonus[row.part];
+    const bonusEligible = BONUS_ELIGIBLE_PARTS.includes(row.part);
     const key = 'localrow_'+row.id;
     const ov = { businessPrice: row.bizOverride, bonus: row.bonusOverride };
-    const line = computeLine({listPrice, materialCost:costInfo.value, hours:partData.hours, installBonusVal, discountRule:rule, override:ov});
+    const line = computeLine({listPrice, materialCost:costInfo.value, hours:partData.hours, installBonusVal, discountRule:rule, override:ov, bonusEligible});
 
     if(view==='internal'){
       opLines.push(buildOpCodeLine({scope:'local', part:row.part, brand, category:row.category, material:row.material, rowId:row.id, manualText:row.opManual, exclTax:line.exclTax, accountType:row.accountType, paymentTarget:row.paymentTarget}));
@@ -1186,7 +1190,7 @@ function renderLocalTable(){
       <td>${costInfo.value!=null?`<span class="val-teal">${fmt(costInfo.value)}</span><span class="info-dot" data-tip="${costInfo.note}">i</span>`:'<span class="placeholder-val">尚未輸入</span>'}</td>
       <td>${line.laborCost!=null?fmt(line.laborCost):'<span class="placeholder-val">—</span>'}</td>
       <td>${installBonusVal!=null?fmt(installBonusVal):'<span class="placeholder-val">未設定</span>'}</td>
-      <td><input class="cell-input" style="width:74px;" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${row.bonusOverride!=null?formatMoney(row.bonusOverride):''}" data-ov-row="${row.id}" data-ov-field="bonusOverride"></td>
+      <td>${bonusEligible?`<input class="cell-input" style="width:74px;" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${row.bonusOverride!=null?formatMoney(row.bonusOverride):''}" data-ov-row="${row.id}" data-ov-field="bonusOverride">`:'<span class="placeholder-val">未設定</span>'}</td>
       <td>
         ${listPrice!=null?`
         <div class="mono price-main">${fmt(listPrice)}</div>
