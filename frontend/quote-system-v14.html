@@ -921,10 +921,12 @@ function renderWholeCarResult(){
 
   const opLine = buildOpCodeLine({scope:'wholecar', group, brand, category, material, rowId:'wc', manualText:wholeCarState.opManual, exclTax:line.exclTax, accountType:wholeCarState.accountType, paymentTarget:wholeCarState.paymentTarget});
 
+  const priceLabel = rule?.name ? `${rule.name}售價` : '業務/接待售價';
+
   wrap.innerHTML = `
     <div class="table-scroll">
     <table class="data">
-      <tr><th>部位</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價(含稅)</th><th>業務/接待售價(含稅)</th><th>售服毛利</th><th>毛利率</th></tr>
+      <tr><th>部位</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價(含稅)</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th></tr>
       <tr>
         <td>全車</td>
         <td>${usage!=null?usage:'<span class="placeholder-val">未輸入</span>'}</td>
@@ -938,7 +940,7 @@ function renderWholeCarResult(){
           <div class="mono" style="font-size:15px;font-weight:700;">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
           <div style="margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:4px;">
             <span style="font-size:10.5px;color:var(--text-dim);">未稅</span>
-            <input class="cell-input" style="width:78px;font-size:11px;color:var(--text-dim);padding:2px 6px;" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&ov.businessPrice==null?formatMoney(Math.round(line.exclTax)):''}" value="${ov.businessPrice!=null?formatMoney(ov.businessPrice):''}" data-ov="${key}" data-field="businessPrice">
+            <input class="cell-input" style="width:78px;font-size:11px;color:var(--text-faint);padding:2px 6px;background:rgba(255,255,255,.05);border:none;border-radius:4px;box-shadow:none;" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&ov.businessPrice==null?formatMoney(Math.round(line.exclTax)):''}" value="${ov.businessPrice!=null?formatMoney(ov.businessPrice):''}" data-ov="${key}" data-field="businessPrice">
           </div>
         </td>
         <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
@@ -1120,7 +1122,7 @@ function renderLocalTable(){
         <div class="mono" style="font-size:15px;font-weight:700;">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
         <div style="margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:4px;">
           <span style="font-size:10.5px;color:var(--text-dim);">未稅</span>
-          <input class="cell-input" style="width:78px;font-size:11px;color:var(--text-dim);padding:2px 6px;" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&row.bizOverride==null?formatMoney(Math.round(line.exclTax)):''}" value="${row.bizOverride!=null?formatMoney(row.bizOverride):''}" data-ov-row="${row.id}" data-ov-field="bizOverride">
+          <input class="cell-input" style="width:78px;font-size:11px;color:var(--text-faint);padding:2px 6px;background:rgba(255,255,255,.05);border:none;border-radius:4px;box-shadow:none;" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&row.bizOverride==null?formatMoney(Math.round(line.exclTax)):''}" value="${row.bizOverride!=null?formatMoney(row.bizOverride):''}" data-ov-row="${row.id}" data-ov-field="bizOverride">
         </div>
       </td>
       <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
@@ -1129,9 +1131,11 @@ function renderLocalTable(){
     </tr>`;
   }).join('');
 
+  const priceLabel = rule?.name ? `${rule.name}售價` : '業務/接待售價';
+
   const head = view==='external'
     ? `<tr><th>部位</th><th>材質名稱</th><th>未稅售價</th><th>含稅售價</th></tr>`
-    : `<tr><th>部位</th><th>類別</th><th>規格</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價(含稅)</th><th>業務/接待售價(含稅)</th><th>售服毛利</th><th>毛利率</th><th></th></tr>`;
+    : `<tr><th>部位</th><th>類別</th><th>規格</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價(含稅)</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th><th></th></tr>`;
 
   const totalRate = (totals.profit && totals.exclTax) ? totals.profit/totals.exclTax : null;
   const totalRow = view==='external'
