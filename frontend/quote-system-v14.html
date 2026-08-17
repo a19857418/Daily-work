@@ -147,6 +147,12 @@
   input.cell-input:hover{background:#181c24;border-color:var(--line);}
   input.cell-input:focus{background:#0f1116;border-color:var(--amber-dim);outline:none;}
 
+  .price-main{font-size:15px;font-weight:700;}
+  .price-sub{margin-top:3px;font-size:10.5px;color:var(--text-faint);}
+  .price-sub-row{margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:4px;}
+  .price-sub-label{font-size:10.5px;color:var(--text-dim);}
+  input.price-sub-input{width:78px;font-size:11px;color:var(--text-faint);padding:2px 6px;background:rgba(255,255,255,.05);border:none;border-radius:4px;box-shadow:none;}
+
   .setting-row{
     display:grid;grid-template-columns:1.4fr 130px 60px;gap:14px;align-items:center;
     padding:10px 4px;border-bottom:1px solid var(--line-soft);
@@ -228,9 +234,13 @@
     .topbar,.no-print{display:none !important;}
     body{background:#fff;color:#000;}
     .panel{border:1px solid #ccc;background:#fff;}
-    table.data{font-size:11px;table-layout:auto;}
-    table.data th, table.data td{padding:5px 6px !important;color:#000 !important;}
+    table.data{font-size:9.5px;table-layout:fixed;width:100%;}
+    table.data th, table.data td{padding:4px 5px !important;color:#000 !important;white-space:normal !important;word-break:break-word;overflow-wrap:break-word;}
     .table-scroll{overflow:visible !important;}
+    input.cell-input{width:100% !important;max-width:100%;min-width:0;box-sizing:border-box;padding:2px 3px !important;}
+    .price-main{font-size:10px !important;}
+    .price-sub, .price-sub-label{font-size:8px !important;color:#555 !important;}
+    input.price-sub-input{font-size:8px !important;color:#555 !important;width:auto !important;min-width:50px;}
     .panel-sub, .val-amber, .badge.internal, .section-nav button.active{color:#333 !important;}
     .tag{color:#000 !important;border-color:#999 !important;background:#fff !important;}
     .tag.tag-amber{color:#000 !important;border-color:#000 !important;font-weight:700;}
@@ -926,7 +936,7 @@ function renderWholeCarResult(){
   wrap.innerHTML = `
     <div class="table-scroll">
     <table class="data">
-      <tr><th>部位</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價(含稅)</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th></tr>
+      <tr><th>部位</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th></tr>
       <tr>
         <td>全車</td>
         <td>${usage!=null?usage:'<span class="placeholder-val">未輸入</span>'}</td>
@@ -935,12 +945,17 @@ function renderWholeCarResult(){
         <td>${line.laborCost!=null?fmt(line.laborCost):'<span class="placeholder-val">—</span>'}</td>
         <td>${installBonusVal!=null?fmt(installBonusVal):'<span class="placeholder-val">未設定</span>'}</td>
         <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${ov.bonus!=null?formatMoney(ov.bonus):''}" data-ov="${key}" data-field="bonus"></td>
-        <td>${listPrice!=null?fmt(listPrice):'<span class="placeholder-val">尚未輸入</span>'}</td>
         <td>
-          <div class="mono" style="font-size:15px;font-weight:700;">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
-          <div style="margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:4px;">
-            <span style="font-size:10.5px;color:var(--text-dim);">未稅</span>
-            <input class="cell-input" style="width:78px;font-size:11px;color:var(--text-faint);padding:2px 6px;background:rgba(255,255,255,.05);border:none;border-radius:4px;box-shadow:none;" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&ov.businessPrice==null?formatMoney(Math.round(line.exclTax)):''}" value="${ov.businessPrice!=null?formatMoney(ov.businessPrice):''}" data-ov="${key}" data-field="businessPrice">
+          ${listPrice!=null?`
+          <div class="mono price-main">${fmt(listPrice)}</div>
+          <div class="price-sub">未稅 ${fmt(listPrice/TAX_RATE_DIVISOR())}</div>
+          `:'<span class="placeholder-val">尚未輸入</span>'}
+        </td>
+        <td>
+          <div class="mono price-main">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
+          <div class="price-sub-row">
+            <span class="price-sub-label">未稅</span>
+            <input class="cell-input price-sub-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&ov.businessPrice==null?formatMoney(Math.round(line.exclTax)):''}" value="${ov.businessPrice!=null?formatMoney(ov.businessPrice):''}" data-ov="${key}" data-field="businessPrice">
           </div>
         </td>
         <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
@@ -1117,12 +1132,17 @@ function renderLocalTable(){
       <td>${line.laborCost!=null?fmt(line.laborCost):'<span class="placeholder-val">—</span>'}</td>
       <td>${installBonusVal!=null?fmt(installBonusVal):'<span class="placeholder-val">未設定</span>'}</td>
       <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${row.bonusOverride!=null?formatMoney(row.bonusOverride):''}" data-ov-row="${row.id}" data-ov-field="bonusOverride"></td>
-      <td>${listPrice!=null?fmt(listPrice):'<span class="placeholder-val">尚未輸入</span>'}</td>
       <td>
-        <div class="mono" style="font-size:15px;font-weight:700;">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
-        <div style="margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:4px;">
-          <span style="font-size:10.5px;color:var(--text-dim);">未稅</span>
-          <input class="cell-input" style="width:78px;font-size:11px;color:var(--text-faint);padding:2px 6px;background:rgba(255,255,255,.05);border:none;border-radius:4px;box-shadow:none;" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&row.bizOverride==null?formatMoney(Math.round(line.exclTax)):''}" value="${row.bizOverride!=null?formatMoney(row.bizOverride):''}" data-ov-row="${row.id}" data-ov-field="bizOverride">
+        ${listPrice!=null?`
+        <div class="mono price-main">${fmt(listPrice)}</div>
+        <div class="price-sub">未稅 ${fmt(listPrice/TAX_RATE_DIVISOR())}</div>
+        `:'<span class="placeholder-val">尚未輸入</span>'}
+      </td>
+      <td>
+        <div class="mono price-main">${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">—</span>'}</div>
+        <div class="price-sub-row">
+          <span class="price-sub-label">未稅</span>
+          <input class="cell-input price-sub-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&row.bizOverride==null?formatMoney(Math.round(line.exclTax)):''}" value="${row.bizOverride!=null?formatMoney(row.bizOverride):''}" data-ov-row="${row.id}" data-ov-field="bizOverride">
         </div>
       </td>
       <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
@@ -1135,7 +1155,7 @@ function renderLocalTable(){
 
   const head = view==='external'
     ? `<tr><th>部位</th><th>材質名稱</th><th>未稅售價</th><th>含稅售價</th></tr>`
-    : `<tr><th>部位</th><th>類別</th><th>規格</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價(含稅)</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th><th></th></tr>`;
+    : `<tr><th>部位</th><th>類別</th><th>規格</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價</th><th>${priceLabel}</th><th>售服毛利</th><th>毛利率</th><th></th></tr>`;
 
   const totalRate = (totals.profit && totals.exclTax) ? totals.profit/totals.exclTax : null;
   const totalRow = view==='external'
