@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>車款大小查詢工具</title>
+<title>車型查詢小模組</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -26,6 +26,9 @@
     background:linear-gradient(180deg,#14161b,#111318);position:sticky;top:0;z-index:50;flex-wrap:wrap;gap:10px;}
   .brand{display:flex;align-items:center;gap:10px;font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;}
   .brand .tag{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber);border:1px solid var(--amber-dim);padding:2px 6px;border-radius:5px;letter-spacing:.05em;}
+  .topbar-left{display:flex;align-items:center;gap:16px;}
+  .back-link{color:var(--text-dim);text-decoration:none;font-size:13px;white-space:nowrap;}
+  .back-link:hover{color:var(--amber);}
 
   .sync-pill{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 12px;border-radius:12px;
     border:1px solid var(--line);color:var(--text-dim);background:var(--panel-2);white-space:nowrap;}
@@ -121,7 +124,10 @@
 <body>
 
 <div class="topbar">
-  <div class="brand">🚗 車款大小查詢工具 <span class="tag">獨立功能</span></div>
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">← 常用系統</a>
+    <div class="brand">🚗 車型查詢小模組 <span class="tag">獨立功能</span></div>
+  </div>
   <div style="display:flex;align-items:center;gap:14px;">
     <span class="sync-pill busy" id="syncTag">連線中…</span>
     <button class="lock-pill" id="lockPill">🔒 解鎖編輯</button>
