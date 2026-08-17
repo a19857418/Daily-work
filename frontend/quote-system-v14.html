@@ -592,7 +592,6 @@ function openModal(title, renderBody, onClose){
    計算邏輯（v14）
    ========================================================= */
 function fmt(n){ if(n==null||isNaN(n)) return null; return Math.round(n).toLocaleString('en-US'); }
-function ceilTo100(n){ if(n==null||isNaN(n)) return null; return Math.ceil(n/100)*100; }
 // 金額類輸入框：顯示千分位逗號，輸入時允許帶逗號，儲存前去除逗號還原成數字
 function formatMoney(n){ if(n==null||n===''||isNaN(n)) return ''; return Number(n).toLocaleString('en-US'); }
 function parseMoney(str){ if(str==null) return null; const cleaned = String(str).replace(/,/g,'').trim(); if(cleaned==='') return null; const n=parseFloat(cleaned); return isNaN(n)?null:n; }
@@ -638,7 +637,7 @@ function computeLine({listPrice, materialCost, hours, installBonusVal, discountR
   const laborCost = (hours!=null) ? hours*DB.hourlyWage : null;
   const inclTax = (listPrice!=null && discountRule) ? listPrice*discountRule.rate : null;
   const exclTaxRaw = inclTax!=null ? inclTax/TAX_RATE_DIVISOR() : null;
-  let exclTax = ceilTo100(exclTaxRaw);
+  let exclTax = exclTaxRaw;
   const ov = override || {};
   if(ov.businessPrice!=null) exclTax = ov.businessPrice;
 
@@ -912,7 +911,10 @@ function renderWholeCarResult(){
         <td>${line.laborCost!=null?fmt(line.laborCost):'<span class="placeholder-val">—</span>'}</td>
         <td>${installBonusVal!=null?fmt(installBonusVal):'<span class="placeholder-val">未設定</span>'}</td>
         <td>${listPrice!=null?fmt(listPrice):'<span class="placeholder-val">尚未輸入</span>'}</td>
-        <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&ov.businessPrice==null?formatMoney(Math.round(line.exclTax)):''}" value="${ov.businessPrice!=null?formatMoney(ov.businessPrice):''}" data-ov="${key}" data-field="businessPrice"></td>
+        <td>
+          <input class="cell-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&ov.businessPrice==null?formatMoney(Math.round(line.exclTax)):''}" value="${ov.businessPrice!=null?formatMoney(ov.businessPrice):''}" data-ov="${key}" data-field="businessPrice">
+          ${line.inclTax!=null?`<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">含稅 ${fmt(line.inclTax)}</div>`:''}
+        </td>
         <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${ov.bonus!=null?formatMoney(ov.bonus):''}" data-ov="${key}" data-field="bonus"></td>
         <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
         <td>${line.profitRate!=null?`${Math.round(line.profitRate*100)}%`:'<span class="placeholder-val">—</span>'}</td>
@@ -1088,7 +1090,10 @@ function renderLocalTable(){
       <td>${line.laborCost!=null?fmt(line.laborCost):'<span class="placeholder-val">—</span>'}</td>
       <td>${installBonusVal!=null?fmt(installBonusVal):'<span class="placeholder-val">未設定</span>'}</td>
       <td>${listPrice!=null?fmt(listPrice):'<span class="placeholder-val">尚未輸入</span>'}</td>
-      <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&row.bizOverride==null?formatMoney(Math.round(line.exclTax)):''}" value="${row.bizOverride!=null?formatMoney(row.bizOverride):''}" data-ov-row="${row.id}" data-ov-field="bizOverride"></td>
+      <td>
+        <input class="cell-input" type="text" inputmode="decimal" placeholder="${line.exclTax!=null&&row.bizOverride==null?formatMoney(Math.round(line.exclTax)):''}" value="${row.bizOverride!=null?formatMoney(row.bizOverride):''}" data-ov-row="${row.id}" data-ov-field="bizOverride">
+        ${line.inclTax!=null?`<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">含稅 ${fmt(line.inclTax)}</div>`:''}
+      </td>
       <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${row.bonusOverride!=null?formatMoney(row.bonusOverride):''}" data-ov-row="${row.id}" data-ov-field="bonusOverride"></td>
       <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
       <td>${line.profitRate!=null?`${Math.round(line.profitRate*100)}%`:'<span class="placeholder-val">—</span>'}</td>
