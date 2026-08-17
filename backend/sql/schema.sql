@@ -53,9 +53,10 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_brand ON vehicles(brand_id);
 -- 犀牛皮貼膜報價系統 v14（app_key = 'quote-settings'）
 -- =========================================================
 CREATE TABLE IF NOT EXISTS qs_system_settings (
-  id          INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-  hourly_wage NUMERIC NOT NULL DEFAULT 220,
-  tax_rate    NUMERIC NOT NULL DEFAULT 0.05
+  id                  INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  hourly_wage         NUMERIC NOT NULL DEFAULT 220,
+  tax_rate            NUMERIC NOT NULL DEFAULT 0.05,
+  parts_ratio_percent NUMERIC NOT NULL DEFAULT 70 -- 內部資訊「零件／工資拆分」，零件佔比(%)，工資=100-此值
 );
 
 -- 全車使用米數依產品類別分別存（v16 起：犀牛皮類／改色膜類可以不同值）；工時仍是不分類別的單一值

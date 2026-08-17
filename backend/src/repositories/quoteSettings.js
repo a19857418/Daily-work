@@ -16,8 +16,9 @@ async function getSettings() {
   const meta = await getMeta(APP_KEY);
   if (!meta) return null;
 
-  const sysRes = await pool.query('SELECT hourly_wage FROM qs_system_settings WHERE id=1');
+  const sysRes = await pool.query('SELECT hourly_wage, parts_ratio_percent FROM qs_system_settings WHERE id=1');
   const hourlyWage = sysRes.rows[0] ? numOrNull(sysRes.rows[0].hourly_wage) : 220;
+  const partsRatioPercent = sysRes.rows[0] ? numOrNull(sysRes.rows[0].parts_ratio_percent) : 70;
 
   const groupsRes = await pool.query('SELECT name, sort_order, usage_rhino, usage_color, hours FROM qs_vehicle_groups ORDER BY sort_order');
   const groupOrder = groupsRes.rows.map((r) => r.name);
@@ -127,6 +128,7 @@ async function getSettings() {
       partOrder,
       installBonus,
       hourlyWage,
+      partsRatioPercent,
       wholeCar: { usage, hours, discountRules: wholeDiscountRules },
       local: { parts: localParts, price: localPrice, discountRules: localDiscountRules },
       brandOrder,
@@ -160,9 +162,9 @@ async function replaceSettings(data, updatedBy, expectedVersion) {
     await client.query('DELETE FROM qs_vehicle_groups');
 
     await client.query(
-      `INSERT INTO qs_system_settings (id, hourly_wage) VALUES (1, $1)
-       ON CONFLICT (id) DO UPDATE SET hourly_wage = $1`,
-      [data.hourlyWage ?? 220]
+      `INSERT INTO qs_system_settings (id, hourly_wage, parts_ratio_percent) VALUES (1, $1, $2)
+       ON CONFLICT (id) DO UPDATE SET hourly_wage = $1, parts_ratio_percent = $2`,
+      [data.hourlyWage ?? 220, data.partsRatioPercent ?? 70]
     );
 
     // 車型群組（全車使用米數依產品類別分開存；相容舊格式「單一數字」，套用到兩個類別）
