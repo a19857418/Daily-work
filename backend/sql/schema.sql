@@ -58,12 +58,14 @@ CREATE TABLE IF NOT EXISTS qs_system_settings (
   tax_rate    NUMERIC NOT NULL DEFAULT 0.05
 );
 
+-- 全車使用米數依產品類別分別存（v16 起：犀牛皮類／改色膜類可以不同值）；工時仍是不分類別的單一值
 CREATE TABLE IF NOT EXISTS qs_vehicle_groups (
-  id         SERIAL PRIMARY KEY,
-  name       TEXT NOT NULL UNIQUE,
-  sort_order INTEGER NOT NULL,
-  usage_m    NUMERIC,
-  hours      NUMERIC
+  id           SERIAL PRIMARY KEY,
+  name         TEXT NOT NULL UNIQUE,
+  sort_order   INTEGER NOT NULL,
+  usage_rhino  NUMERIC,  -- 犀牛皮類 全車使用米數
+  usage_color  NUMERIC,  -- 改色膜類 全車使用米數
+  hours        NUMERIC
 );
 
 -- 部位清單；"全車"（整台車模式專用）也存在這張表，sort_order 為 NULL 代表不列入局部部位清單
@@ -134,4 +136,16 @@ CREATE TABLE IF NOT EXISTS qs_overrides (
   key            TEXT PRIMARY KEY,
   business_price NUMERIC,
   bonus          NUMERIC
+);
+
+-- OP代碼設定（v16 新增）：報價輸出時自動組出施工說明文字用的三組代碼
+CREATE TABLE IF NOT EXISTS qs_op_codes (
+  scope       TEXT PRIMARY KEY CHECK (scope IN ('wholeCar','localSpecific','localOther')),
+  code        TEXT,
+  description TEXT
+);
+
+-- "局部貼膜－指定部位用" OP代碼適用的部位清單
+CREATE TABLE IF NOT EXISTS qs_op_code_specific_parts (
+  part_id INTEGER PRIMARY KEY REFERENCES qs_parts(id) ON DELETE CASCADE
 );

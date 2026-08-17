@@ -19,12 +19,12 @@ async function getSettings() {
   const sysRes = await pool.query('SELECT hourly_wage FROM qs_system_settings WHERE id=1');
   const hourlyWage = sysRes.rows[0] ? numOrNull(sysRes.rows[0].hourly_wage) : 220;
 
-  const groupsRes = await pool.query('SELECT name, sort_order, usage_m, hours FROM qs_vehicle_groups ORDER BY sort_order');
+  const groupsRes = await pool.query('SELECT name, sort_order, usage_rhino, usage_color, hours FROM qs_vehicle_groups ORDER BY sort_order');
   const groupOrder = groupsRes.rows.map((r) => r.name);
   const usage = {};
   const hours = {};
   groupsRes.rows.forEach((r) => {
-    usage[r.name] = numOrNull(r.usage_m);
+    usage[r.name] = { 犀牛皮類: numOrNull(r.usage_rhino), 改色膜類: numOrNull(r.usage_color) };
     hours[r.name] = numOrNull(r.hours);
   });
 
@@ -106,6 +106,18 @@ async function getSettings() {
     overrides[r.key] = { businessPrice: numOrNull(r.business_price), bonus: numOrNull(r.bonus) };
   });
 
+  const opCodesRes = await pool.query('SELECT scope, code, description FROM qs_op_codes');
+  const specificPartsRes = await pool.query(`
+    SELECT p.name FROM qs_op_code_specific_parts sp JOIN qs_parts p ON p.id = sp.part_id
+  `);
+  const opCodesByScope = {};
+  opCodesRes.rows.forEach((r) => { opCodesByScope[r.scope] = { code: r.code || '', desc: r.description || '' }; });
+  const opCodes = {
+    wholeCar: opCodesByScope.wholeCar || { code: '', desc: '' },
+    localSpecific: { ...(opCodesByScope.localSpecific || { code: '', desc: '' }), parts: specificPartsRes.rows.map((r) => r.name) },
+    localOther: opCodesByScope.localOther || { code: '', desc: '' },
+  };
+
   return {
     version: meta.version,
     updatedAt: meta.updated_at,
@@ -120,6 +132,7 @@ async function getSettings() {
       brandOrder,
       brands,
       overrides,
+      opCodes,
     },
   };
 }
@@ -134,6 +147,8 @@ async function replaceSettings(data, updatedBy, expectedVersion) {
       throw new VersionConflictError(currentVersion);
     }
 
+    await client.query('DELETE FROM qs_op_code_specific_parts');
+    await client.query('DELETE FROM qs_op_codes');
     await client.query('DELETE FROM qs_local_part_price');
     await client.query('DELETE FROM qs_whole_car_price');
     await client.query('DELETE FROM qs_material_rolls');
@@ -150,14 +165,17 @@ async function replaceSettings(data, updatedBy, expectedVersion) {
       [data.hourlyWage ?? 220]
     );
 
-    // 車型群組
+    // 車型群組（全車使用米數依產品類別分開存；相容舊格式「單一數字」，套用到兩個類別）
     const groupOrder = data.groupOrder || [];
     const groupIdByName = {};
     for (let i = 0; i < groupOrder.length; i++) {
       const g = groupOrder[i];
+      const u = data.wholeCar?.usage?.[g];
+      const usageRhino = u != null && typeof u === 'object' ? u['犀牛皮類'] ?? null : u ?? null;
+      const usageColor = u != null && typeof u === 'object' ? u['改色膜類'] ?? null : u ?? null;
       const res = await client.query(
-        'INSERT INTO qs_vehicle_groups (name, sort_order, usage_m, hours) VALUES ($1,$2,$3,$4) RETURNING id',
-        [g, i, data.wholeCar?.usage?.[g] ?? null, data.wholeCar?.hours?.[g] ?? null]
+        'INSERT INTO qs_vehicle_groups (name, sort_order, usage_rhino, usage_color, hours) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+        [g, i, usageRhino, usageColor, data.wholeCar?.hours?.[g] ?? null]
       );
       groupIdByName[g] = res.rows[0].id;
     }
@@ -275,6 +293,32 @@ async function replaceSettings(data, updatedBy, expectedVersion) {
         ov.businessPrice ?? null,
         ov.bonus ?? null,
       ]);
+    }
+
+    // OP代碼設定
+    if (data.opCodes) {
+      const oc = data.opCodes;
+      await client.query('INSERT INTO qs_op_codes (scope, code, description) VALUES ($1,$2,$3)', [
+        'wholeCar',
+        oc.wholeCar?.code ?? null,
+        oc.wholeCar?.desc ?? null,
+      ]);
+      await client.query('INSERT INTO qs_op_codes (scope, code, description) VALUES ($1,$2,$3)', [
+        'localSpecific',
+        oc.localSpecific?.code ?? null,
+        oc.localSpecific?.desc ?? null,
+      ]);
+      await client.query('INSERT INTO qs_op_codes (scope, code, description) VALUES ($1,$2,$3)', [
+        'localOther',
+        oc.localOther?.code ?? null,
+        oc.localOther?.desc ?? null,
+      ]);
+      for (const partName of oc.localSpecific?.parts || []) {
+        const partId = partIdByName[partName];
+        if (partId != null) {
+          await client.query('INSERT INTO qs_op_code_specific_parts (part_id) VALUES ($1) ON CONFLICT DO NOTHING', [partId]);
+        }
+      }
     }
 
     const newVersion = currentVersion + 1;

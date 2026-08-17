@@ -250,9 +250,14 @@ async function loadDB(){
       return;
     }
     if(res.status === 404){
-      // 後端尚無資料：使用出廠預設值，並寫回後端建立初始版本
+      // 後端尚無資料：使用出廠預設值；已解鎖才寫回後端建立初始版本，避免一般訪客觸發無權限的寫入
       DB = factoryVehicleDB();
-      await saveDB();
+      if(isAdmin()){
+        await saveDB();
+      } else {
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }catch(e){}
+        setSyncTag('err', '尚無資料（解鎖後可建立）');
+      }
       return;
     }
     throw new Error('後端回應異常：' + res.status);

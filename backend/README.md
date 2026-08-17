@@ -60,7 +60,9 @@ npm run create-user -- <帳號名稱，隨意> <密碼> admin
 | POST | `/api/vehicle-catalog/import` | 需帶解鎖後的 token | 一次性匯入（略過樂觀鎖） |
 | GET／PUT／history／restore／import | `/api/quote-settings...` | 同上 | 犀牛皮貼膜報價系統 v14 的整包設定，路徑規則相同 |
 
-底層資料已正規化到 PostgreSQL 資料表（見 `sql/schema.sql`：`vehicle_brands`/`vehicles`、`qs_brands`/`qs_materials`/`qs_material_rolls`/`qs_whole_car_price`/`qs_local_part_price`/`qs_discount_rules`/`qs_parts`/`qs_vehicle_groups`/`qs_overrides`/`qs_system_settings` 等），API 對前端仍呈現「整包 JSON 讀寫」的形狀，讓兩套前端工具維持原本簡單的 `loadDB()`/`saveDB()` 心智模型；每次寫入同時會在 `settings_history` 留一份快照供備份／還原。
+底層資料已正規化到 PostgreSQL 資料表（見 `sql/schema.sql`：`vehicle_brands`/`vehicles`、`qs_brands`/`qs_materials`/`qs_material_rolls`/`qs_whole_car_price`/`qs_local_part_price`/`qs_discount_rules`/`qs_parts`/`qs_vehicle_groups`/`qs_overrides`/`qs_system_settings`/`qs_op_codes`/`qs_op_code_specific_parts` 等），API 對前端仍呈現「整包 JSON 讀寫」的形狀，讓兩套前端工具維持原本簡單的 `loadDB()`/`saveDB()` 心智模型；每次寫入同時會在 `settings_history` 留一份快照供備份／還原。
+
+> `frontend/quote-system-v14.html` 目前對應的是 2026-08-10 版（內部代號 v16／畫面上顯示「20260810 v5」）的資料格式，包含：全車使用米數依產品類別（犀牛皮類／改色膜類）分開儲存（`qs_vehicle_groups.usage_rhino`/`usage_color`）、OP代碼設定（`qs_op_codes`/`qs_op_code_specific_parts`）。之後若你在這份檔案上繼續加新欄位，記得同步更新 `sql/schema.sql` 與 `src/repositories/quoteSettings.js` 的組裝/拆解邏輯，否則新欄位不會被存進資料庫。
 
 ## 部署到 GCP
 

@@ -55,7 +55,6 @@
   .sync-pill.ok{color:var(--green);border-color:#245239;}
   .sync-pill.err{color:var(--red);border-color:#6b3a24;}
   .sync-pill.busy{color:var(--amber);border-color:var(--amber-dim);}
-
   .lock-pill{font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 12px;border-radius:12px;
     border:1px solid var(--line);color:var(--text-dim);background:var(--panel-2);cursor:pointer;white-space:nowrap;}
   .lock-pill.unlocked{color:var(--green);border-color:#245239;}
@@ -123,6 +122,7 @@
     font-family:'JetBrains Mono',monospace;font-size:13px;transition:.12s;
   }
   input.cell-input::placeholder{color:var(--text);opacity:1;font-family:'JetBrains Mono',monospace;}
+  input.op-manual-input::placeholder{color:var(--text-faint);opacity:1;}
   input.cell-input:hover{background:#181c24;border-color:var(--line);}
   input.cell-input:focus{background:#0f1116;border-color:var(--amber-dim);outline:none;}
 
@@ -156,7 +156,7 @@
   .roll-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
   .subtle-panel{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px;}
 
-  /* ---------- hover tooltip（取代常駐顯示的 note 文字） ---------- */
+  /* ---------- hover tooltip (replaces always-visible note text) ---------- */
   .info-dot{
     display:inline-flex;align-items:center;justify-content:center;margin-left:6px;width:15px;height:15px;border-radius:50%;
     background:var(--panel-2);border:1px solid var(--line);color:var(--text-faint);font-size:10px;font-style:normal;
@@ -170,7 +170,7 @@
     text-align:left;z-index:80;box-shadow:0 6px 18px rgba(0,0,0,.45);
   }
 
-  /* ---------- settings shell：側邊欄版型 ---------- */
+  /* ---------- settings shell: sidebar layout ---------- */
   .settings-shell{display:flex;gap:24px;align-items:flex-start;}
   .settings-sidebar{width:160px;flex-shrink:0;position:sticky;top:78px;}
   .settings-sidebar .group-label{font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:16px 0 6px;padding-left:10px;}
@@ -203,17 +203,33 @@
   .modal-body{padding:20px 22px;max-height:65vh;overflow-y:auto;}
   .modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--line);}
   @media print{
+    @page{ size: A4 landscape; margin: 10mm; }
     .topbar,.no-print{display:none !important;}
     body{background:#fff;color:#000;}
     .panel{border:1px solid #ccc;background:#fff;}
-    table.data td, table.data th{color:#000 !important;}
+    table.data{font-size:11px;table-layout:auto;}
+    table.data th, table.data td{padding:5px 6px !important;color:#000 !important;}
+    .table-scroll{overflow:visible !important;}
+    .panel-sub, .val-amber, .badge.internal, .section-nav button.active{color:#333 !important;}
+    .tag{color:#000 !important;border-color:#999 !important;background:#fff !important;}
+    .tag.tag-amber{color:#000 !important;border-color:#000 !important;font-weight:700;}
+    .op-copy-text{color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .subtle-panel{background:#fff !important;border:1px solid #999 !important;}
+    input.cell-input::placeholder{color:#333 !important;opacity:1 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    select, input[type=text], input[type=number], input[type=date]{color:#000 !important;background:#fff !important;border-color:#999 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .placeholder-val{color:#777 !important;}
+    .val-teal{color:#0a7d68 !important;}
+    .val-green{color:#1a7a3c !important;}
+    .readonly-field{color:#000 !important;}
+    .field>span{color:#333 !important;}
+    .note{color:#555 !important;}
   }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="brand">🦏 犀牛皮貼膜報價系統 <span class="tag">v14</span></div>
+  <div class="brand">🦏 犀牛皮貼膜報價系統 <span class="tag">20260810 v5</span></div>
   <div class="topbar-right">
     <span class="sync-pill busy" id="syncTag">連線中…</span>
     <button class="lock-pill" id="lockPill">🔒 解鎖</button>
@@ -280,7 +296,8 @@ function defaultDiscountRules(kind){
     return [
       {id:'d'+Math.random().toString(36).slice(2,8), name:'75折', rate:0.75, bonusType:'fixed', bonusValue:3000},
       {id:'d'+Math.random().toString(36).slice(2,8), name:'8折',  rate:0.80, bonusType:'percent', bonusValue:0.08},
-      {id:'d'+Math.random().toString(36).slice(2,8), name:'9折',  rate:0.90, bonusType:'percent', bonusValue:0.15}
+      {id:'d'+Math.random().toString(36).slice(2,8), name:'9折',  rate:0.90, bonusType:'percent', bonusValue:0.15},
+      {id:'d'+Math.random().toString(36).slice(2,8), name:'原價(無折扣)', rate:1.00, bonusType:'percent', bonusValue:0.20}
     ];
   }
   return [
@@ -292,20 +309,26 @@ function defaultDiscountRules(kind){
 
 function emptyLocalPart(){ return {usage:null, hours:null}; }
 function emptyPriceByGroup(){ return {"小車":null,"一般車":null,"大車":null}; }
+function emptyUsageByCategory(){ return {"犀牛皮類":null,"改色膜類":null}; }
 
 function factoryDB(){
   return {
     groupOrder: ["小車","一般車","大車"],
-    partOrder: [...PART_ORDER_DEFAULT],
+    partOrder: [...PART_ORDER_DEFAULT, "保險桿(前或後)/後葉子板", "引擎蓋/側裙(單支)", "葉子板(前)(後)門/後尾門/後廂"],
     installBonus: {
       "全車":5000, "迎風面":3000, "天橋(屋頂)":3000, "後視鏡(2個)":null, "大燈(2個)":null,
-      "尾燈(2個)":null, "水箱護罩(外一圈)":null, "四門外把手(改色)":null, "左側裙(單支)":null, "右側裙(單支)":null
+      "尾燈(2個)":null, "水箱護罩(外一圈)":null, "四門外把手(改色)":null, "左側裙(單支)":null, "右側裙(單支)":null,
+      "保險桿(前或後)/後葉子板":null, "引擎蓋/側裙(單支)":null, "葉子板(前)(後)門/後尾門/後廂":null
     },
     hourlyWage: 220,
 
     wholeCar: {
-      usage: {"小車":15, "一般車":null, "大車":20},
-      hours: {"小車":40, "一般車":null, "大車":48},
+      usage: {
+        "小車": {"犀牛皮類":15, "改色膜類":15},
+        "一般車": {"犀牛皮類":15, "改色膜類":15},
+        "大車": {"犀牛皮類":20, "改色膜類":22.8}
+      },
+      hours: {"小車":40, "一般車":40, "大車":48},
       discountRules: {} // brand -> [rules]
     },
     local: {
@@ -318,11 +341,17 @@ function factoryDB(){
         "水箱護罩(外一圈)": emptyLocalPart(),
         "四門外把手(改色)": emptyLocalPart(),
         "左側裙(單支)": emptyLocalPart(),
-        "右側裙(單支)": emptyLocalPart()
+        "右側裙(單支)": emptyLocalPart(),
+        "保險桿(前或後)/後葉子板": {usage:3, hours:3},
+        "引擎蓋/側裙(單支)": {usage:2, hours:2.5},
+        "葉子板(前)(後)門/後尾門/後廂": {usage:1, hours:1.5}
       },
       price: {
         "迎風面": { "3M": {"犀牛皮類":50000, "改色膜類":40000}, "STEK": {"犀牛皮類":40000} },
-        "天橋(屋頂)": { "3M": {"犀牛皮類":50000, "改色膜類":40000}, "STEK": {"犀牛皮類":40000} }
+        "天橋(屋頂)": { "3M": {"犀牛皮類":50000, "改色膜類":40000}, "STEK": {"犀牛皮類":40000} },
+        "保險桿(前或後)/後葉子板": { "3M": {"犀牛皮類":30000, "改色膜類":25000}, "STEK": {"犀牛皮類":25000} },
+        "引擎蓋/側裙(單支)": { "3M": {"犀牛皮類":22500, "改色膜類":20000}, "STEK": {"犀牛皮類":20000} },
+        "葉子板(前)(後)門/後尾門/後廂": { "3M": {"犀牛皮類":9500, "改色膜類":8000}, "STEK": {"犀牛皮類":8000} }
       },
       discountRules: {} // brand -> [rules]
     },
@@ -334,16 +363,16 @@ function factoryDB(){
           "犀牛皮類": {
             materialOrder: ["高光150G","消光200M"],
             materials: {
-              "高光150G": { rolls:[{unit:15,cost:49426}], priceByGroup:{"小車":137500,"一般車":null,"大車":150000} },
-              "消光200M": { rolls:[{unit:15,cost:62402}], priceByGroup: emptyPriceByGroup() }
+              "高光150G": { rolls:[{unit:15,cost:49426}], priceByGroup:{"小車":120000,"一般車":140000,"大車":160000} },
+              "消光200M": { rolls:[{unit:15,cost:62402}], priceByGroup:{"小車":146000,"一般車":166000,"大車":186000} }
             }
           },
           "改色膜類": {
             materialOrder: ["G亮/M霧/S緞","HG高亮/GP優亮/SP優緞","變色龍卡夢"],
             materials: {
-              "G亮/M霧/S緞": { rolls:[{unit:15,cost:26973},{unit:22.8,cost:40999}], pieceRate:1998, priceByGroup: emptyPriceByGroup() },
-              "HG高亮/GP優亮/SP優緞": { rolls:[{unit:15,cost:31347},{unit:22.8,cost:47647}], pieceRate:2322, priceByGroup: emptyPriceByGroup() },
-              "變色龍卡夢": { rolls:[{unit:15,cost:35721},{unit:22.8,cost:54296}], pieceRate:2646, priceByGroup: emptyPriceByGroup() }
+              "G亮/M霧/S緞": { rolls:[{unit:15,cost:26973},{unit:22.8,cost:40999}], pieceRate:1998, priceByGroup:{"小車":106000,"一般車":126000,"大車":146000} },
+              "HG高亮/GP優亮/SP優緞": { rolls:[{unit:15,cost:31347},{unit:22.8,cost:47647}], pieceRate:2322, priceByGroup:{"小車":131200,"一般車":151200,"大車":171200} },
+              "變色龍卡夢": { rolls:[{unit:15,cost:35721},{unit:22.8,cost:54296}], pieceRate:2646, priceByGroup:{"小車":137500,"一般車":157500,"大車":177500} }
             }
           }
         }
@@ -353,8 +382,8 @@ function factoryDB(){
           "犀牛皮類": {
             materialOrder: ["高光150G","消光200M"],
             materials: {
-              "高光150G": { rolls:[{unit:15,cost:30000}], priceByGroup: emptyPriceByGroup() },
-              "消光200M": { rolls:[{unit:15,cost:36000}], priceByGroup: emptyPriceByGroup() }
+              "高光150G": { rolls:[{unit:15,cost:30000}], priceByGroup:{"小車":95000,"一般車":115000,"大車":135000} },
+              "消光200M": { rolls:[{unit:15,cost:36000}], priceByGroup:{"小車":105000,"一般車":125000,"大車":145000} }
             }
           },
           "改色膜類": { materialOrder: [], materials: {} }
@@ -362,7 +391,13 @@ function factoryDB(){
       }
     },
 
-    overrides: {} // key -> {businessPrice, bonus}
+    overrides: {}, // key -> {businessPrice, bonus}
+
+    opCodes: {
+      wholeCar: { code:"00297", desc:"全車犀牛皮或改色用" },
+      localSpecific: { code:"00298", desc:"迎風面/天橋屋頂", parts:["迎風面","天橋(屋頂)"] },
+      localOther: { code:"00299", desc:"局部貼膜" }
+    }
   };
 }
 
@@ -438,9 +473,14 @@ async function loadDB(){
       return;
     }
     if(res.status === 404){
-      // 後端尚無資料：使用出廠預設值，並寫回後端建立初始版本
+      // 後端尚無資料：使用出廠預設值；已解鎖才寫回後端建立初始版本，避免一般訪客觸發無權限的寫入
       DB = factoryDB();
-      await saveDB();
+      if(isAdmin()){
+        await saveDB();
+      } else {
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }catch(e){}
+        setSyncTag('err', '尚無資料（解鎖後可建立）');
+      }
       return;
     }
     throw new Error('後端回應異常：' + res.status);
@@ -504,6 +544,10 @@ async function importDBFromFile(file){
     if(!confirm('確定要匯入此檔案，覆蓋目前所有系統設定嗎？此動作無法復原。')) return;
     DB = parsed;
     ensureDiscountDefaults();
+    ensureUsageStructure();
+    ensureV14DataFill();
+    ensureFullPriceBonusRule();
+    ensureOpCodes();
     await saveDB();
     toast('已匯入系統設定');
     renderSettingsPage(); renderWholeCarPage();
@@ -607,6 +651,46 @@ function TAX_RATE_DIVISOR(){ return 1 + TAX_RATE; }
 function overrideKey(...parts){ return parts.join("|"); }
 
 /* =========================================================
+   OP代碼（勞務代碼）— 報價輸出時自動組出的施工說明文字
+   ========================================================= */
+function getOpCodeForPart(part){
+  const oc = DB.opCodes;
+  if(oc.localSpecific.parts.includes(part)) return oc.localSpecific;
+  return oc.localOther;
+}
+// scope='wholecar'|'local'; rowId identifies which manual-text input this line binds to
+function buildOpCodeLine({scope, group, part, brand, category, material, rowId, manualText}){
+  const opCode = scope==='wholecar' ? DB.opCodes.wholeCar : getOpCodeForPart(part);
+  const prefix = scope==='wholecar' ? `${group} 全車` : part;
+  return { code: opCode.code, prefix, brand, category, material, rowId, manualText: manualText||'' };
+}
+function opLineFullText(l){
+  return `${l.prefix} ${l.brand}-${l.category} ${l.material}${l.manualText?(' '+l.manualText):''}`;
+}
+function opCodeBlockHtml(lines, editable){
+  if(!lines.length) return '';
+  return `
+    <div class="panel-sub" style="margin:16px 0 6px;">施工代碼（OP Code）</div>
+    <div class="subtle-panel" style="padding:12px 14px;">
+      ${lines.map(l=>{
+        const fullLine = opLineFullText(l);
+        return `
+        <div style="margin-bottom:${editable?'12':'8'}px;">
+          <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;">
+            <span class="tag tag-amber">${l.code}</span>
+            <span class="op-copy-text mono" data-opline-text="${l.rowId}" style="text-align:left;font-weight:700;color:var(--amber);">${fullLine}</span>
+          </div>
+          ${editable ? `
+          <label class="field no-print" style="max-width:220px;margin-top:6px;margin-left:2px;">自填最終規格
+            <input type="text" class="cell-input op-manual-input" style="text-align:left;" placeholder="例如：2080-G363" value="${l.manualText}" data-opline-id="${l.rowId}">
+          </label>` : ''}
+        </div>
+      `;}).join('')}
+    </div>
+  `;
+}
+
+/* =========================================================
    共用：折扣規則下拉
    ========================================================= */
 function ruleSelectHtml(id, rules, selectedId){
@@ -619,7 +703,7 @@ function ruleSelectHtml(id, rules, selectedId){
 /* =========================================================
    整台車報價 頁
    ========================================================= */
-let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null };
+let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null, opManual:'' };
 
 function ensureBrandCategoryMaterial(state){
   state.brand = state.brand && DB.brandOrder.includes(state.brand) ? state.brand : DB.brandOrder[0];
@@ -649,8 +733,8 @@ function renderWholeCarPage(){
           <span class="badge ${wholeCarState.view==='internal'?'internal':'external'}">${wholeCarState.view==='internal'?'對內版（含成本/毛利）':'對外版（客戶版）'}</span>
         </div>
         <div style="display:flex;gap:8px;">
-          <button class="btn ${wholeCarState.view==='internal'?'primary':''}" id="wcInternal">對內版</button>
-          <button class="btn ${wholeCarState.view==='external'?'primary':''}" id="wcExternal">對外版</button>
+          <button class="btn no-print ${wholeCarState.view==='internal'?'primary':''}" id="wcInternal">對內版</button>
+          <button class="btn no-print ${wholeCarState.view==='external'?'primary':''}" id="wcExternal">對外版</button>
           <button class="btn no-print" id="wcPrint">🖨️ 列印/PDF</button>
         </div>
       </div>
@@ -719,7 +803,7 @@ function renderWholeCarResult(){
   const {group, brand, category, material, view} = wholeCarState;
   if(!material){ wrap.innerHTML = `<div class="empty-hint">此廠商/類別尚未建立任何規格，請先到「系統設定」新增。</div>`; return; }
 
-  const usage = DB.wholeCar.usage[group];
+  const usage = DB.wholeCar.usage[group]?.[category];
   const hours = DB.wholeCar.hours[group];
   const costInfo = getMaterialCost(brand, category, material, usage, 'whole');
   const mat = getMaterial(brand, category, material);
@@ -731,6 +815,8 @@ function renderWholeCarResult(){
   const key = overrideKey('whole', group, brand, category, material, rule?.id);
   const ov = DB.overrides[key] || {};
   const line = computeLine({listPrice, materialCost:costInfo.value, hours, installBonusVal, discountRule:rule, override:ov});
+
+  const opLine = buildOpCodeLine({scope:'wholecar', group, brand, category, material, rowId:'wc', manualText:wholeCarState.opManual});
 
   if(view==='external'){
     wrap.innerHTML = `
@@ -744,6 +830,7 @@ function renderWholeCarResult(){
           <td>${line.inclTax!=null?fmt(line.inclTax):'<span class="placeholder-val">尚未輸入</span>'}</td>
         </tr>
       </table>
+      ${opCodeBlockHtml([opLine], false)}
     `;
     return;
   }
@@ -767,6 +854,7 @@ function renderWholeCarResult(){
       </tr>
     </table>
     </div>
+    ${opCodeBlockHtml([opLine], true)}
   `;
   wrap.querySelectorAll('input[data-ov]').forEach(inp=>{
     inp.onchange = async ()=>{
@@ -774,6 +862,13 @@ function renderWholeCarResult(){
       DB.overrides[k] = DB.overrides[k] || {};
       DB.overrides[k][field] = parseMoney(inp.value);
       await saveDB(); renderWholeCarResult();
+    };
+  });
+  wrap.querySelectorAll('[data-opline-id]').forEach(inp=>{
+    inp.oninput = ()=>{
+      wholeCarState.opManual = inp.value;
+      const textSpan = wrap.querySelector('.op-copy-text[data-opline-text="'+inp.dataset.oplineId+'"]');
+      if(textSpan) textSpan.textContent = opLineFullText(buildOpCodeLine({scope:'wholecar', group:wholeCarState.group, brand:wholeCarState.brand, category:wholeCarState.category, material:wholeCarState.material, rowId:'wc', manualText:inp.value}));
     };
   });
 }
@@ -787,7 +882,7 @@ function localAddRow(part){
   const brandObj = DB.brands[localState.brand];
   const cat = CATEGORY_LIST.find(c=>brandObj.categories[c].materialOrder.length>0) || CATEGORY_LIST[0];
   const material = brandObj.categories[cat].materialOrder[0] || '';
-  localState.rows.push({ id:'row'+Date.now()+Math.random().toString(36).slice(2,6), part: part||DB.partOrder[0], category:cat, material, bizOverride:null, bonusOverride:null });
+  localState.rows.push({ id:'row'+Date.now()+Math.random().toString(36).slice(2,6), part: part||DB.partOrder[0], category:cat, material, bizOverride:null, bonusOverride:null, opManual:'' });
 }
 
 function renderLocalPage(){
@@ -808,9 +903,9 @@ function renderLocalPage(){
           <div class="panel-sub">不分車型大小；部位/使用米數/工時/售價來自系統設定的部位目錄，選規格只影響材料成本（同廠商同類別售價共用）</div>
         </div>
         <div style="display:flex;gap:8px;">
-          <button class="btn ${localState.view==='internal'?'primary':''}" id="lcInternal">對內版</button>
-          <button class="btn ${localState.view==='external'?'primary':''}" id="lcExternal">對外版</button>
-          <button class="btn" id="lcClearBtn">🗑 清空工單</button>
+          <button class="btn no-print ${localState.view==='internal'?'primary':''}" id="lcInternal">對內版</button>
+          <button class="btn no-print ${localState.view==='external'?'primary':''}" id="lcExternal">對外版</button>
+          <button class="btn no-print" id="lcClearBtn">🗑 清空工單</button>
           <button class="btn no-print" id="lcPrintBtn">🖨️ 列印/PDF</button>
         </div>
       </div>
@@ -832,7 +927,7 @@ function renderLocalPage(){
       </div>
       ${localState.view==='external' ? `<div class="panel-sub" style="margin-bottom:14px;">對外版為對內版設定完成後的唯讀快照，若要新增/刪除部位或更改廠商規格請切回對內版</div>` : ''}
       <div id="localTableWrap"></div>
-      ${localState.view==='internal' ? `<button class="btn sm" id="lcAddRowBtn" style="margin-top:12px;">＋ 新增部位列</button>` : ''}
+      ${localState.view==='internal' ? `<button class="btn sm no-print" id="lcAddRowBtn" style="margin-top:12px;">＋ 新增部位列</button>` : ''}
     </div>
   `;
 
@@ -877,6 +972,7 @@ function renderLocalTable(){
 
   let totals = {materialCost:0, laborCost:0, installBonus:0, inclTax:0, exclTax:0, bonus:0, profit:0};
   let any = {materialCost:false, exclTax:false};
+  const opLines = localState.rows.map(row=>buildOpCodeLine({scope:'local', part:row.part, brand, category:row.category, material:row.material, rowId:row.id, manualText:row.opManual}));
 
   const rows = localState.rows.map(row=>{
     const partData = DB.local.parts[row.part] || {usage:null,hours:null};
@@ -925,7 +1021,7 @@ function renderLocalTable(){
       <td><input class="cell-input" type="text" inputmode="decimal" placeholder="${line.bonusDefault!=null?formatMoney(Math.round(line.bonusDefault)):''}" value="${row.bonusOverride!=null?formatMoney(row.bonusOverride):''}" data-ov-row="${row.id}" data-ov-field="bonusOverride"></td>
       <td>${line.profit!=null?`<span class="val-green">${fmt(line.profit)}</span>`:'<span class="placeholder-val">—</span>'}</td>
       <td>${line.profitRate!=null?`${Math.round(line.profitRate*100)}%`:'<span class="placeholder-val">—</span>'}</td>
-      <td><button class="btn sm danger" data-del-row="${row.id}">刪除</button></td>
+      <td><button class="btn sm danger no-print" data-del-row="${row.id}">刪除</button></td>
     </tr>`;
   }).join('');
 
@@ -940,8 +1036,20 @@ function renderLocalTable(){
 
   const dateLine = view==='external' ? `<div class="panel-sub" style="margin-bottom:10px;">日期：${localState.date} ｜ 客戶車款：${localState.customerModel || '<span class="placeholder-val">（未填寫）</span>'}</div>` : '';
 
-  wrap.innerHTML = `${dateLine}<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>`;
+  wrap.innerHTML = `${dateLine}<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>${opCodeBlockHtml(opLines, view==='internal')}`;
 
+  wrap.querySelectorAll('[data-opline-id]').forEach(inp=>{
+    inp.oninput = ()=>{
+      const row = localState.rows.find(r=>r.id===inp.dataset.oplineId);
+      row.opManual = inp.value;
+      const line = opLines.find(l=>l.rowId===row.id);
+      if(line){
+        line.manualText = inp.value;
+        const textSpan = wrap.querySelector('.op-copy-text[data-opline-text="'+row.id+'"]');
+        if(textSpan) textSpan.textContent = opLineFullText(line);
+      }
+    };
+  });
   wrap.querySelectorAll('[data-row-field]').forEach(sel=>{
     sel.onchange = ()=>{
       const row = localState.rows.find(r=>r.id===sel.dataset.rowId);
@@ -1132,6 +1240,9 @@ const SETTINGS_NAV = [
   ]},
   { group:'規則', items:[
     { tab:'rules', label:'折扣獎金規則' }
+  ]},
+  { group:'輸出', items:[
+    { tab:'opcodes', label:'OP代碼設定' }
   ]}
 ];
 
@@ -1157,6 +1268,7 @@ function renderSettingsPage(){
   if(settingsTab==='wholecarprice') renderWholeCarPriceSettings(body);
   if(settingsTab==='localparts') renderLocalPartsSettings(body);
   if(settingsTab==='rules') renderRulesSettings(body);
+  if(settingsTab==='opcodes') renderOpCodesSettings(body);
 }
 
 /* ---- 3.1 車型群組 + 全車工時/米數 + 人工時薪 ---- */
@@ -1193,11 +1305,14 @@ function renderGroupsSettings(body){
         ${DB.groupOrder.map(name=>`<button data-g="${name}" class="${name===g?'active':''}">${name}</button>`).join('')}
       </div>
       <div style="display:flex;gap:24px;flex-wrap:wrap;">
-        <label class="field">全車工時
+        <label class="field">全車工時（不分產品類別）
           <input type="number" step="0.5" id="wcHoursInput" value="${DB.wholeCar.hours[g]??''}" placeholder="未輸入">
         </label>
-        <label class="field">全車使用米數
-          <input type="number" step="0.1" id="wcUsageInput" value="${DB.wholeCar.usage[g]??''}" placeholder="未輸入">
+        <label class="field">全車使用米數 — 犀牛皮類
+          <input type="number" step="0.1" id="wcUsageRhinoInput" value="${DB.wholeCar.usage[g]?.['犀牛皮類']??''}" placeholder="未輸入">
+        </label>
+        <label class="field">全車使用米數 — 改色膜類
+          <input type="number" step="0.1" id="wcUsageColorInput" value="${DB.wholeCar.usage[g]?.['改色膜類']??''}" placeholder="未輸入">
         </label>
       </div>
     </div>
@@ -1235,8 +1350,14 @@ function renderGroupsSettings(body){
     DB.wholeCar.hours[g] = e.target.value===''? null : parseFloat(e.target.value);
     await saveDB(); renderWholeCarPage();
   };
-  document.getElementById('wcUsageInput').onchange = async e=>{
-    DB.wholeCar.usage[g] = e.target.value===''? null : parseFloat(e.target.value);
+  document.getElementById('wcUsageRhinoInput').onchange = async e=>{
+    DB.wholeCar.usage[g] = DB.wholeCar.usage[g] || emptyUsageByCategory();
+    DB.wholeCar.usage[g]['犀牛皮類'] = e.target.value===''? null : parseFloat(e.target.value);
+    await saveDB(); renderWholeCarPage();
+  };
+  document.getElementById('wcUsageColorInput').onchange = async e=>{
+    DB.wholeCar.usage[g] = DB.wholeCar.usage[g] || emptyUsageByCategory();
+    DB.wholeCar.usage[g]['改色膜類'] = e.target.value===''? null : parseFloat(e.target.value);
     await saveDB(); renderWholeCarPage();
   };
   document.getElementById('btnExportDB').onclick = exportDB;
@@ -1546,12 +1667,114 @@ function renderLocalPartsSettings(body){
 let rulesModeState = 'whole';
 let rulesBrandState = null;
 function ensureDiscountDefaults(){
-  let changed = false;
   DB.brandOrder.forEach(bn=>{
-    if(!DB.wholeCar.discountRules[bn]){ DB.wholeCar.discountRules[bn] = defaultDiscountRules('whole'); changed = true; }
-    if(!DB.local.discountRules[bn]){ DB.local.discountRules[bn] = defaultDiscountRules('local'); changed = true; }
+    if(!DB.wholeCar.discountRules[bn]) DB.wholeCar.discountRules[bn] = defaultDiscountRules('whole');
+    if(!DB.local.discountRules[bn]) DB.local.discountRules[bn] = defaultDiscountRules('local');
   });
-  return changed;
+}
+// 舊版存檔的 wholeCar.usage 是「車型群組→單一數字」，新版改為「車型群組→產品類別→數字」，這裡做一次性轉換
+function ensureUsageStructure(){
+  DB.groupOrder.forEach(g=>{
+    const u = DB.wholeCar.usage[g];
+    if(u==null || typeof u === 'number'){
+      DB.wholeCar.usage[g] = { "犀牛皮類": u ?? null, "改色膜類": u ?? null };
+    }
+  });
+}
+// 一次性回填：舊存檔裡尚未輸入(null)的既有資料，補上使用者最新提供的定值。只補null，不覆蓋使用者已手動輸入過的數字
+function ensureV14DataFill(){
+  DB.meta = DB.meta || {};
+  if(DB.meta.dataFillApplied_1) return;
+
+  if(DB.wholeCar.hours['一般車']==null) DB.wholeCar.hours['一般車'] = 40;
+  DB.wholeCar.usage['一般車'] = DB.wholeCar.usage['一般車'] || {};
+  if(DB.wholeCar.usage['一般車']['犀牛皮類']==null) DB.wholeCar.usage['一般車']['犀牛皮類'] = 15;
+  if(DB.wholeCar.usage['一般車']['改色膜類']==null) DB.wholeCar.usage['一般車']['改色膜類'] = 15;
+  DB.wholeCar.usage['大車'] = DB.wholeCar.usage['大車'] || {};
+  if(DB.wholeCar.usage['大車']['犀牛皮類']==null) DB.wholeCar.usage['大車']['犀牛皮類'] = 20;
+  if(DB.wholeCar.usage['大車']['改色膜類']==null) DB.wholeCar.usage['大車']['改色膜類'] = 22.8;
+
+  const priceFills = {
+    "3M": {
+      "犀牛皮類": { "高光150G":{"小車":120000,"一般車":140000,"大車":160000}, "消光200M":{"小車":146000,"一般車":166000,"大車":186000} },
+      "改色膜類": { "G亮/M霧/S緞":{"小車":106000,"一般車":126000,"大車":146000}, "HG高亮/GP優亮/SP優緞":{"小車":131200,"一般車":151200,"大車":171200}, "變色龍卡夢":{"小車":137500,"一般車":157500,"大車":177500} }
+    },
+    "STEK": {
+      "犀牛皮類": { "高光150G":{"小車":95000,"一般車":115000,"大車":135000}, "消光200M":{"小車":105000,"一般車":125000,"大車":145000} }
+    }
+  };
+  for(const bn in priceFills){
+    if(!DB.brands[bn]) continue;
+    for(const cat in priceFills[bn]){
+      if(!DB.brands[bn].categories[cat]) continue;
+      for(const mat in priceFills[bn][cat]){
+        const m = DB.brands[bn].categories[cat].materials[mat];
+        if(!m) continue;
+        for(const g in priceFills[bn][cat][mat]){
+          if(m.priceByGroup[g]==null) m.priceByGroup[g] = priceFills[bn][cat][mat][g];
+        }
+      }
+    }
+  }
+
+  const newParts = {
+    "保險桿(前或後)/後葉子板": {usage:3, hours:3, price:{"3M":{"犀牛皮類":30000,"改色膜類":25000},"STEK":{"犀牛皮類":25000}}},
+    "引擎蓋/側裙(單支)": {usage:2, hours:2.5, price:{"3M":{"犀牛皮類":22500,"改色膜類":20000},"STEK":{"犀牛皮類":20000}}},
+    "葉子板(前)(後)門/後尾門/後廂": {usage:1, hours:1.5, price:{"3M":{"犀牛皮類":9500,"改色膜類":8000},"STEK":{"犀牛皮類":8000}}}
+  };
+  for(const p in newParts){
+    if(!DB.partOrder.includes(p)) DB.partOrder.push(p);
+    if(!(p in DB.installBonus)) DB.installBonus[p] = null;
+  }
+
+  const partFills = Object.assign({}, newParts, {
+    "大燈(2個)": {usage:1.5, hours:1, price:{"3M":{"犀牛皮類":7000,"改色膜類":5000},"STEK":{"犀牛皮類":5000}}},
+    "水箱護罩(外一圈)": {usage:1.5, hours:1, price:{"3M":{"犀牛皮類":7000,"改色膜類":5000},"STEK":{"犀牛皮類":5000}}},
+    "後視鏡(2個)": {usage:1.5, hours:4, price:{"3M":{"犀牛皮類":8000,"改色膜類":6500},"STEK":{"犀牛皮類":6500}}},
+    "四門外把手(改色)": {usage:1.5, hours:1, price:{"3M":{"犀牛皮類":7000,"改色膜類":6000},"STEK":{"犀牛皮類":6000}}}
+  });
+  for(const p in partFills){
+    if(!DB.local.parts[p]) DB.local.parts[p] = emptyLocalPart();
+    if(DB.local.parts[p].usage==null) DB.local.parts[p].usage = partFills[p].usage;
+    if(DB.local.parts[p].hours==null) DB.local.parts[p].hours = partFills[p].hours;
+    DB.local.price[p] = DB.local.price[p] || {};
+    for(const bn in partFills[p].price){
+      DB.local.price[p][bn] = DB.local.price[p][bn] || {};
+      for(const cat in partFills[p].price[bn]){
+        if(DB.local.price[p][bn][cat]==null) DB.local.price[p][bn][cat] = partFills[p].price[bn][cat];
+      }
+    }
+  }
+
+  // 舊資料曾誤存137,500（3M高光150G/小車），使用者確認正確值是120,000，強制覆寫一次（不是null-fill，因為舊值不是null）
+  const highGloss3M = DB.brands['3M']?.categories?.['犀牛皮類']?.materials?.['高光150G'];
+  if(highGloss3M && highGloss3M.priceByGroup['小車']===137500){
+    highGloss3M.priceByGroup['小車'] = 120000;
+  }
+
+  DB.meta.dataFillApplied_1 = true;
+}
+// 新增「原價(無折扣)」整台車折扣規則(rate=100%,獎金比例20%)，回填給已存在的品牌
+function ensureFullPriceBonusRule(){
+  DB.meta = DB.meta || {};
+  if(DB.meta.fullPriceRuleAdded_1) return;
+  DB.brandOrder.forEach(bn=>{
+    const list = DB.wholeCar.discountRules[bn];
+    if(list && !list.some(r=>r.rate===1)){
+      list.push({id:'d'+Date.now()+Math.random().toString(36).slice(2,6), name:'原價(無折扣)', rate:1.00, bonusType:'percent', bonusValue:0.20});
+    }
+  });
+  DB.meta.fullPriceRuleAdded_1 = true;
+}
+// 舊存檔沒有 opCodes 欄位時，補上出廠預設的三組OP代碼
+function ensureOpCodes(){
+  if(!DB.opCodes){
+    DB.opCodes = {
+      wholeCar: { code:"00297", desc:"全車犀牛皮或改色用" },
+      localSpecific: { code:"00298", desc:"迎風面/天橋屋頂", parts:["迎風面","天橋(屋頂)"] },
+      localOther: { code:"00299", desc:"局部貼膜" }
+    };
+  }
 }
 function renderRulesSettings(body){
   ensureDiscountDefaults();
@@ -1640,6 +1863,90 @@ function renderRuleCards(body, list){
   });
 }
 
+/* ---- OP代碼設定（勞務代碼，串接報價輸出時自動組出的施工說明文字） ---- */
+function renderOpCodesSettings(body){
+  const oc = DB.opCodes;
+  body.innerHTML = `
+    <div class="panel" style="max-width:760px;">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">🏷️ OP代碼設定</div>
+          <div class="panel-sub">報價輸出（對內/對外皆會顯示）時，系統會依這裡的規則自動組出施工說明文字，業務只需補填最終規格（例如色號）</div>
+        </div>
+      </div>
+
+      <div class="item-card" style="width:100%;flex-direction:row;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div class="item-main">
+          <div class="item-title">整台車報價用</div>
+          <div class="panel-sub">組成格式：車型群組 全車 廠商-產品類別 規格 [自填]</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <label class="field" style="max-width:100px;">代碼
+            <input type="text" class="mono" id="ocWholeCode" value="${oc.wholeCar.code}">
+          </label>
+          <label class="field" style="min-width:180px;">用途說明
+            <input type="text" style="font-family:'Inter',sans-serif;" id="ocWholeDesc" value="${oc.wholeCar.desc}">
+          </label>
+        </div>
+      </div>
+
+      <div class="item-card" style="width:100%;flex-direction:column;align-items:stretch;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div class="item-main">
+            <div class="item-title">局部貼膜－指定部位用</div>
+            <div class="panel-sub">組成格式：部位 廠商-產品類別 規格 [自填]（只適用下方勾選的部位）</div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <label class="field" style="max-width:100px;">代碼
+              <input type="text" class="mono" id="ocSpecCode" value="${oc.localSpecific.code}">
+            </label>
+            <label class="field" style="min-width:180px;">用途說明
+              <input type="text" style="font-family:'Inter',sans-serif;" id="ocSpecDesc" value="${oc.localSpecific.desc}">
+            </label>
+          </div>
+        </div>
+        <div class="chips" id="ocSpecParts" style="margin-top:10px;margin-bottom:0;">
+          ${DB.partOrder.map(p=>`
+            <label style="display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:12.5px;cursor:pointer;">
+              <input type="checkbox" data-oc-part="${p}" ${oc.localSpecific.parts.includes(p)?'checked':''} style="accent-color:var(--amber);">${p}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="item-card" style="width:100%;flex-direction:row;align-items:center;justify-content:space-between;">
+        <div class="item-main">
+          <div class="item-title">局部貼膜－其他部位用</div>
+          <div class="panel-sub">組成格式同上，適用所有未被上面指定部位涵蓋的局部部位</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <label class="field" style="max-width:100px;">代碼
+            <input type="text" class="mono" id="ocOtherCode" value="${oc.localOther.code}">
+          </label>
+          <label class="field" style="min-width:180px;">用途說明
+            <input type="text" style="font-family:'Inter',sans-serif;" id="ocOtherDesc" value="${oc.localOther.desc}">
+          </label>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('ocWholeCode').onchange = async e=>{ oc.wholeCar.code = e.target.value.trim(); await saveDB(); renderWholeCarPage(); };
+  document.getElementById('ocWholeDesc').onchange = async e=>{ oc.wholeCar.desc = e.target.value.trim(); await saveDB(); };
+  document.getElementById('ocSpecCode').onchange = async e=>{ oc.localSpecific.code = e.target.value.trim(); await saveDB(); renderLocalPage(); };
+  document.getElementById('ocSpecDesc').onchange = async e=>{ oc.localSpecific.desc = e.target.value.trim(); await saveDB(); };
+  document.getElementById('ocOtherCode').onchange = async e=>{ oc.localOther.code = e.target.value.trim(); await saveDB(); renderLocalPage(); };
+  document.getElementById('ocOtherDesc').onchange = async e=>{ oc.localOther.desc = e.target.value.trim(); await saveDB(); };
+  body.querySelectorAll('[data-oc-part]').forEach(chk=>{
+    chk.onchange = async ()=>{
+      const p = chk.dataset.ocPart;
+      if(chk.checked){ if(!oc.localSpecific.parts.includes(p)) oc.localSpecific.parts.push(p); }
+      else { oc.localSpecific.parts = oc.localSpecific.parts.filter(x=>x!==p); }
+      await saveDB(); renderLocalPage();
+    };
+  });
+}
+
 /* =========================================================
    頁面切換 & 啟動
    ========================================================= */
@@ -1698,8 +2005,17 @@ document.getElementById('lockPill').onclick = ()=>{
 
 (async function init(){
   await loadDB();
-  const changed = ensureDiscountDefaults();
-  if(changed) await saveDB();
+  const before = JSON.stringify(DB);
+  ensureDiscountDefaults();
+  ensureUsageStructure();
+  ensureV14DataFill();
+  ensureFullPriceBonusRule();
+  ensureOpCodes();
+  // 只有資料真的被這些一次性遷移函式改過、且目前是解鎖狀態時才寫回後端；
+  // 一般訪客（未解鎖）仍會在本次瀏覽階段套用這些修正值，只是不會嘗試寫入後端
+  if(JSON.stringify(DB) !== before && isAdmin()){
+    await saveDB();
+  }
   renderWholeCarPage();
   updateAuthUI();
 })();
