@@ -724,12 +724,24 @@ function buildOpCodeLine({scope, group, part, brand, category, material, rowId, 
 function opLineFullText(l){
   return `${l.prefix} ${l.brand}-${l.category} ${l.material}${l.manualText?(' '+l.manualText):''}`;
 }
-// 內部資訊區塊：僅供對內版使用（客戶對外版不會顯示）。含施工代碼、帳務歸屬/付款對象、零件工資拆分
-function opCodeBlockHtml(lines){
+// 內部資訊區塊：僅供對內版使用（客戶對外版不會顯示）。含車牌/業務接待人員、施工代碼、帳務歸屬/付款對象、零件工資拆分
+// meta = {licensePlate, salesStaff}，整張報價單共用一組（不分行），會印在紙本上，所以不是 no-print
+function opCodeBlockHtml(lines, meta){
   if(!lines.length) return '';
+  meta = meta || {};
   return `
     <div class="panel-sub" style="margin:16px 0 6px;">內部資訊</div>
     <div class="subtle-panel" style="padding:12px 14px;">
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="panel-sub" style="margin:0;white-space:nowrap;">車牌(或車身碼)</span>
+          <input type="text" class="cell-input" style="width:140px;text-align:left;" placeholder="例：ABC-1234" value="${meta.licensePlate||''}" data-meta-field="licensePlate">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="panel-sub" style="margin:0;white-space:nowrap;">業務/接待人員</span>
+          <input type="text" class="cell-input" style="width:120px;text-align:left;" placeholder="姓名" value="${meta.salesStaff||''}" data-meta-field="salesStaff">
+        </div>
+      </div>
       ${lines.map(l=>{
         const fullLine = opLineFullText(l);
         const split = partsLaborSplit();
@@ -792,6 +804,13 @@ function bindOpInfoButtons(wrap, findState, rerender){
     };
   });
 }
+// 內部資訊區塊裡「車牌(或車身碼)」「業務/接待人員」的共用事件綁定；
+// state 是整份報價單共用的狀態物件（wholeCarState 或 localState），不需要重繪
+function bindOpMetaInputs(wrap, state){
+  wrap.querySelectorAll('[data-meta-field]').forEach(inp=>{
+    inp.oninput = ()=>{ state[inp.dataset.metaField] = inp.value; };
+  });
+}
 
 // 列印前防呆：檢查必填欄位（車型/廠商/規格/折扣規則 + 自填最終規格/帳務歸屬/付款對象）是否都已填寫，
 // 回傳缺漏欄位的文字說明陣列；空陣列代表可以列印
@@ -848,7 +867,7 @@ function ruleSelectHtml(id, rules, selectedId){
 /* =========================================================
    整台車報價 頁
    ========================================================= */
-let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null, opManual:'', accountType:null, paymentTarget:null };
+let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null, opManual:'', accountType:null, paymentTarget:null, licensePlate:'', salesStaff:'' };
 
 function ensureBrandCategoryMaterial(state){
   state.brand = state.brand && DB.brandOrder.includes(state.brand) ? state.brand : DB.brandOrder[0];
@@ -1018,7 +1037,7 @@ function renderWholeCarResult(){
       </tr>
     </table>
     </div>
-    ${opCodeBlockHtml([opLine])}
+    ${opCodeBlockHtml([opLine], wholeCarState)}
   `;
   wrap.querySelectorAll('input[data-ov]').forEach(inp=>{
     inp.onchange = async ()=>{
@@ -1029,6 +1048,7 @@ function renderWholeCarResult(){
     };
   });
   bindOpInfoButtons(wrap, ()=>wholeCarState, renderWholeCarResult);
+  bindOpMetaInputs(wrap, wholeCarState);
   wrap.querySelectorAll('[data-opline-id]').forEach(inp=>{
     inp.oninput = ()=>{
       wholeCarState.opManual = inp.value;
@@ -1041,7 +1061,7 @@ function renderWholeCarResult(){
 /* =========================================================
    局部貼膜估價 頁（設定驅動的部位目錄；報價實例為前端暫存）
    ========================================================= */
-let localState = { brand:null, ruleId:null, view:'internal', customerModel:'', date:null, rows:[] };
+let localState = { brand:null, ruleId:null, view:'internal', customerModel:'', date:null, rows:[], licensePlate:'', salesStaff:'' };
 
 function localAddRow(part){
   const brandObj = DB.brands[localState.brand];
@@ -1227,9 +1247,10 @@ function renderLocalTable(){
 
   const dateLine = view==='external' ? `<div class="panel-sub" style="margin-bottom:10px;">日期：${localState.date} ｜ 客戶車款：${localState.customerModel || '<span class="placeholder-val">（未填寫）</span>'}</div>` : '';
 
-  wrap.innerHTML = `${dateLine}<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>${view==='internal'?opCodeBlockHtml(opLines):''}`;
+  wrap.innerHTML = `${dateLine}<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>${view==='internal'?opCodeBlockHtml(opLines, localState):''}`;
 
   bindOpInfoButtons(wrap, (rowId)=>localState.rows.find(r=>r.id===rowId), renderLocalTable);
+  bindOpMetaInputs(wrap, localState);
   wrap.querySelectorAll('[data-opline-id]').forEach(inp=>{
     inp.oninput = ()=>{
       const row = localState.rows.find(r=>r.id===inp.dataset.oplineId);
