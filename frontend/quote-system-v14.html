@@ -144,6 +144,7 @@
   }
   input.cell-input::placeholder{color:var(--text);opacity:1;font-family:'JetBrains Mono',monospace;}
   input.op-manual-input::placeholder{color:var(--text-faint);opacity:1;}
+  input.meta-input::placeholder{color:var(--text-faint);font-style:italic;opacity:1;font-family:'Inter',sans-serif;}
   input.cell-input:hover{background:#181c24;border-color:var(--line);}
   input.cell-input:focus{background:#0f1116;border-color:var(--amber-dim);outline:none;}
 
@@ -735,11 +736,11 @@ function opCodeBlockHtml(lines, meta){
       <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="panel-sub" style="margin:0;white-space:nowrap;">車牌(或車身碼)</span>
-          <input type="text" class="cell-input" style="width:140px;text-align:left;" placeholder="例：ABC-1234" value="${meta.licensePlate||''}" data-meta-field="licensePlate">
+          <input type="text" class="cell-input meta-input" style="width:140px;text-align:left;" placeholder="例：ABC-1234" value="${meta.licensePlate||''}" data-meta-field="licensePlate">
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="panel-sub" style="margin:0;white-space:nowrap;">業務/接待人員</span>
-          <input type="text" class="cell-input" style="width:120px;text-align:left;" placeholder="姓名" value="${meta.salesStaff||''}" data-meta-field="salesStaff">
+          <input type="text" class="cell-input meta-input" style="width:120px;text-align:left;" placeholder="姓名" value="${meta.salesStaff||''}" data-meta-field="salesStaff">
         </div>
       </div>
       ${lines.map(l=>{
@@ -812,7 +813,7 @@ function bindOpMetaInputs(wrap, state){
   });
 }
 
-// 列印前防呆：檢查必填欄位（車型/廠商/規格/折扣規則 + 自填最終規格/帳務歸屬/付款對象）是否都已填寫，
+// 列印前防呆：檢查必填欄位（車型/廠商/規格/折扣規則 + 車牌/業務接待人員/自填最終規格/帳務歸屬/付款對象）是否都已填寫，
 // 回傳缺漏欄位的文字說明陣列；空陣列代表可以列印
 function validateWholeCarBeforePrint(){
   const missing = [];
@@ -822,6 +823,8 @@ function validateWholeCarBeforePrint(){
   if(!wholeCarState.material) missing.push('規格');
   const rules = DB.wholeCar.discountRules[wholeCarState.brand] || [];
   if(!rules.find(r=>r.id===wholeCarState.ruleId)) missing.push('折扣規則');
+  if(!wholeCarState.licensePlate || !wholeCarState.licensePlate.trim()) missing.push('車牌(或車身碼)');
+  if(!wholeCarState.salesStaff || !wholeCarState.salesStaff.trim()) missing.push('業務/接待人員');
   if(!wholeCarState.opManual || !wholeCarState.opManual.trim()) missing.push('自填最終規格');
   if(!wholeCarState.accountType) missing.push('帳務歸屬');
   if(!wholeCarState.paymentTarget) missing.push('付款對象');
@@ -832,6 +835,8 @@ function validateLocalBeforePrint(){
   if(!localState.brand) missing.push('膜料廠商');
   const rules = DB.local.discountRules[localState.brand] || [];
   if(!rules.find(r=>r.id===localState.ruleId)) missing.push('折扣規則');
+  if(!localState.licensePlate || !localState.licensePlate.trim()) missing.push('車牌(或車身碼)');
+  if(!localState.salesStaff || !localState.salesStaff.trim()) missing.push('業務/接待人員');
   const brandObj = DB.brands[localState.brand];
   localState.rows.forEach((row,idx)=>{
     const label = `第${idx+1}列（${row.part||'未命名部位'}）`;
