@@ -763,10 +763,10 @@ function opCodeBlockHtml(lines){
             帳務：${l.accountType || '<span class="placeholder-val">未選擇</span>'}　付款對象：${l.paymentTarget || '<span class="placeholder-val">未選擇</span>'}
           </div>
           ${l.exclTax!=null ? `
-          <div class="panel-sub" style="margin-top:10px;margin-left:2px;">零件／工資拆分（依業務/接待售價未稅金額 ${Math.round(split.parts*100)}%／${Math.round(split.labor*100)}% 拆分，交接零件與接待人員依此金額登打工單）</div>
-          <div class="mono" style="margin-top:2px;margin-left:2px;">
+          <div class="mono" style="margin-top:10px;margin-left:2px;">
             零件(未稅)　<span class="val-teal" style="font-weight:700;">${fmt(partsAmt)}</span>　　工資(未稅)　<span class="val-amber" style="font-weight:700;">${fmt(laborAmt)}</span>
-          </div>` : ''}
+          </div>
+          <div class="note" style="margin-top:4px;margin-left:2px;">依業務/接待售價未稅金額 ${Math.round(split.parts*100)}%／${Math.round(split.labor*100)}% 拆分，交接零件與接待人員依此金額登打工單</div>` : ''}
         </div>
       `;}).join('')}
     </div>
