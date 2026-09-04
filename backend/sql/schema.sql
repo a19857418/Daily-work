@@ -56,8 +56,12 @@ CREATE TABLE IF NOT EXISTS qs_system_settings (
   id                  INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   hourly_wage         NUMERIC NOT NULL DEFAULT 220,
   tax_rate            NUMERIC NOT NULL DEFAULT 0.05,
-  parts_ratio_percent NUMERIC NOT NULL DEFAULT 70 -- 內部資訊「零件／工資拆分」，零件佔比(%)，工資=100-此值
+  parts_ratio_percent NUMERIC NOT NULL DEFAULT 70, -- 內部資訊「零件／工資拆分」，零件佔比(%)，工資=100-此值
+  biz_quote_seq       JSONB NOT NULL DEFAULT '{}' -- 對業務版報價編號：{"YYYYMMDD": 當日已用序號}，跨裝置共用同一份累加序號
 );
+-- CREATE TABLE IF NOT EXISTS 對已存在的資料庫是no-op，不會補上新欄位；
+-- 已部署過的環境要補這個新欄位，需要 ALTER TABLE（新環境第一次跑 migrate 不受影響，這行也是安全的no-op）
+ALTER TABLE qs_system_settings ADD COLUMN IF NOT EXISTS biz_quote_seq JSONB NOT NULL DEFAULT '{}';
 
 -- 全車使用米數依產品類別分別存（v16 起：犀牛皮類／改色膜類可以不同值）；工時仍是不分類別的單一值
 CREATE TABLE IF NOT EXISTS qs_vehicle_groups (

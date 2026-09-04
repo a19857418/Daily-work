@@ -184,6 +184,7 @@
   .section-nav button.active{color:var(--amber);border-bottom-color:var(--amber);}
   .roll-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
   .subtle-panel{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px;}
+  .biz-highlight{color:var(--text);}
 
   /* ---------- hover tooltip (replaces always-visible note text) ---------- */
   .info-dot{
@@ -233,7 +234,7 @@
   .modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--line);}
   @media print{
     @page{ size: A4 landscape; margin: 10mm; }
-    .topbar,.no-print{display:none !important;}
+    .topbar,.no-print,.toast{display:none !important;}
     body{background:#fff;color:#000;}
     .panel{border:1px solid #ccc;background:#fff;}
     table.data{font-size:9.5px;table-layout:fixed;width:100%;}
@@ -256,6 +257,7 @@
     .readonly-field{color:#000 !important;}
     .field>span{color:#333 !important;}
     .note{color:#555 !important;}
+    .biz-highlight{color:#000 !important;}
   }
 </style>
 </head>
@@ -264,7 +266,7 @@
 <div class="topbar">
   <div class="topbar-left">
     <a href="#" class="back-link" id="homeBackLink" hidden>← 返回首頁</a>
-    <div class="brand" id="brandText">🔧 車體工藝中心系統 <span class="tag">20260810 v5</span></div>
+    <div class="brand" id="brandText">🔧 車體工藝中心系統 <span class="tag">20260904 v2</span></div>
   </div>
   <div class="topbar-right">
     <span class="sync-pill busy" id="syncTag">連線中…</span>
@@ -699,6 +701,37 @@ function TAX_RATE_DIVISOR(){ return 1 + TAX_RATE; }
 
 function overrideKey(...parts){ return parts.join("|"); }
 
+// 對業務版用：不論實際選的是哪個折扣規則，一律以「75折」規則的價格當作業務成本價基準
+function calcBenchmarkPrice(listPrice, rules){
+  const bizRule = rules.find(r=>r.name==='75折') || rules.find(r=>Math.abs(r.rate-0.75)<0.001) || null;
+  if(!bizRule || listPrice==null) return {rule:bizRule, inclTax:null, exclTax:null};
+  const line = computeLine({listPrice, materialCost:null, hours:null, installBonusVal:null, discountRule:bizRule, override:{}});
+  return {rule:bizRule, inclTax:line.inclTax, exclTax:line.exclTax};
+}
+
+// 對業務版編號：日期+當日流水序號，序號存在DB裡跨頁面/跨天持續累加
+function nextBizNo(){
+  const d = new Date();
+  const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  DB.bizQuoteSeq = DB.bizQuoteSeq || {};
+  const seq = (DB.bizQuoteSeq[dateStr]||0) + 1;
+  DB.bizQuoteSeq[dateStr] = seq;
+  saveDB();
+  return `${dateStr}-${String(seq).padStart(2,'0')}`;
+}
+
+// 對業務版要用直式列印，其餘（對內版/對外版的寬表格）維持橫式；動態覆寫 @page 方向
+function printQuote(orientation){
+  let styleEl = document.getElementById('printOrientationOverride');
+  if(!styleEl){
+    styleEl = document.createElement('style');
+    styleEl.id = 'printOrientationOverride';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent = orientation==='portrait' ? '@media print{ @page{ size:A4 portrait; margin:14mm; } }' : '';
+  window.print();
+}
+
 /* =========================================================
    OP代碼（勞務代碼）— 報價輸出時自動組出的施工說明文字
    ========================================================= */
@@ -872,7 +905,7 @@ function ruleSelectHtml(id, rules, selectedId){
 /* =========================================================
    整台車報價 頁
    ========================================================= */
-let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null, opManual:'', accountType:null, paymentTarget:null, licensePlate:'', salesStaff:'' };
+let wholeCarState = { group:null, brand:null, category:null, material:null, ruleId:null, view:'internal', customerModel:'', date:null, opManual:'', accountType:null, paymentTarget:null, licensePlate:'', salesStaff:'', bizNo:null };
 
 function ensureBrandCategoryMaterial(state){
   state.brand = state.brand && DB.brandOrder.includes(state.brand) ? state.brand : DB.brandOrder[0];
@@ -899,11 +932,12 @@ function renderWholeCarPage(){
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">🚘 整台車報價
-          <span class="badge ${wholeCarState.view==='internal'?'internal':'external'}">${wholeCarState.view==='internal'?'對內版（含成本/毛利）':'對外版（客戶版）'}</span>
+          <span class="badge ${wholeCarState.view==='internal'?'internal':(wholeCarState.view==='business'?'internal':'external')}">${wholeCarState.view==='internal'?'對內版（含成本/毛利）':(wholeCarState.view==='business'?'對業務版（業務用）':'對外版（客戶版）')}</span>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn no-print ${wholeCarState.view==='internal'?'primary':''}" id="wcInternal">對內版</button>
           <button class="btn no-print ${wholeCarState.view==='external'?'primary':''}" id="wcExternal">對外版</button>
+          <button class="btn no-print ${wholeCarState.view==='business'?'primary':''}" id="wcBusiness">對業務版</button>
           <button class="btn no-print" id="wcPrint">🖨️ 列印/PDF</button>
         </div>
       </div>
@@ -929,7 +963,7 @@ function renderWholeCarPage(){
             const bonusLabel = r.bonusType==='fixed' ? `定值${fmt(r.bonusValue)}` : `比例${Math.round(r.bonusValue*100)}%`;
             return `<option value="${r.id}" ${r.id===wholeCarState.ruleId?'selected':''}>${r.name}（${Math.round(r.rate*100)}%，獎金${bonusLabel}）</option>`;
           }).join('')}</select>
-        </label>` : `
+        </label>` : (wholeCarState.view==='external' ? `
         <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">車型群組</span><div class="readonly-field">${wholeCarState.group}</div></div>
         <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${wholeCarState.brand}</div></div>
         <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">產品類別</span><div class="readonly-field">${wholeCarState.category}</div></div>
@@ -939,19 +973,21 @@ function renderWholeCarPage(){
         </label>
         <label class="field">日期
           <input type="date" id="wcDate" value="${wholeCarState.date}">
-        </label>`}
+        </label>` : '')}
       </div>
       ${wholeCarState.view==='external' ? `<div class="panel-sub" style="margin-bottom:14px;">對外版為對內版設定完成後的唯讀快照，若要更改車型/材質/規格請切回對內版</div>` : ''}
+      ${wholeCarState.view==='business' ? `<div class="panel-sub" style="margin-bottom:14px;">對業務版為對內版設定完成後的唯讀快照，若要更改車型/材質/規格請切回對內版</div>` : ''}
       <div id="wcResultWrap"></div>
     </div>
   `;
 
   document.getElementById('wcInternal').onclick=()=>{wholeCarState.view='internal';renderWholeCarPage();};
   document.getElementById('wcExternal').onclick=()=>{wholeCarState.view='external';renderWholeCarPage();};
+  document.getElementById('wcBusiness').onclick=()=>{wholeCarState.view='business';renderWholeCarPage();};
   document.getElementById('wcPrint').onclick=()=>{
     const missing = validateWholeCarBeforePrint();
     if(missing.length){ showMissingFieldsModal(missing); return; }
-    window.print();
+    printQuote(wholeCarState.view==='business' ? 'portrait' : 'landscape');
   };
   const wcGroupSel = document.getElementById('wcGroup');
   if(wcGroupSel) wcGroupSel.onchange=e=>{wholeCarState.group=e.target.value;renderWholeCarPage();};
@@ -1002,6 +1038,11 @@ function renderWholeCarResult(){
         </tr>
       </table>
     `;
+    return;
+  }
+
+  if(view==='business'){
+    renderWholeCarBusinessBlock(wrap, {group, brand, category, material, listPrice, rules});
     return;
   }
 
@@ -1063,10 +1104,49 @@ function renderWholeCarResult(){
   });
 }
 
+// 對業務版：只給業務/現場人員看，價格只顯示表定售價與75折(業務成本價)兩個數字，不顯示零件/工資拆分
+function renderWholeCarBusinessBlock(wrap, ctx){
+  const {group, brand, category, material, listPrice, rules} = ctx;
+  if(!wholeCarState.bizNo) wholeCarState.bizNo = nextBizNo();
+  const bench = calcBenchmarkPrice(listPrice, rules);
+  const opLine = buildOpCodeLine({scope:'wholecar', group, brand, category, material, rowId:'wc-biz', manualText:wholeCarState.opManual});
+
+  wrap.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div class="panel-sub" style="margin:0;">日期：${wholeCarState.date||todayStr()}</div>
+      <div class="panel-sub" style="margin:0;">編號：${wholeCarState.bizNo}</div>
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
+      <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">車型群組</span><div class="readonly-field">${group}</div></div>
+      <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${brand}</div></div>
+      <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">產品類別</span><div class="readonly-field">${category}</div></div>
+      <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">規格</span><div class="readonly-field">${material}</div></div>
+      <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">部位</span><div class="readonly-field">全車</div></div>
+    </div>
+    <div class="subtle-panel" style="padding:16px 18px;margin-bottom:16px;display:flex;gap:48px;flex-wrap:wrap;">
+      <div>
+        <div class="panel-sub" style="margin:0 0 4px;">表定售價（含稅）</div>
+        <div class="mono" style="font-size:20px;font-weight:700;">${listPrice!=null?fmt(listPrice):'<span class="placeholder-val">尚未輸入</span>'}</div>
+      </div>
+      <div>
+        <div class="panel-sub" style="margin:0 0 4px;">75折（含稅・業務成本價）</div>
+        <div class="mono" style="font-size:20px;font-weight:700;color:var(--amber);">${bench.inclTax!=null?fmt(bench.inclTax):'<span class="placeholder-val">尚未設定75折規則</span>'}</div>
+      </div>
+    </div>
+    <div class="panel-sub" style="margin:0 0 14px;">車牌(或車身碼)：${wholeCarState.licensePlate?`<b class="biz-highlight">${wholeCarState.licensePlate}</b>`:'<span class="placeholder-val">未填寫</span>'}　　業務/接待人員：${wholeCarState.salesStaff?`<b class="biz-highlight">${wholeCarState.salesStaff}</b>`:'<span class="placeholder-val">未填寫</span>'}</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <span class="panel-sub" style="margin:0;white-space:nowrap;">施工代碼(OP code)</span>
+      <span class="tag tag-amber">${opLine.code}</span>
+      <span class="op-copy-text mono" style="text-align:left;font-weight:700;color:var(--amber);">${opLineFullText(opLine)}</span>
+    </div>
+    <div class="panel-sub" style="margin:0;">帳務：${wholeCarState.accountType||'<span class="placeholder-val">未選擇</span>'}　　付款對象：${wholeCarState.paymentTarget||'<span class="placeholder-val">未選擇</span>'}</div>
+  `;
+}
+
 /* =========================================================
    局部貼膜估價 頁（設定驅動的部位目錄；報價實例為前端暫存）
    ========================================================= */
-let localState = { brand:null, ruleId:null, view:'internal', customerModel:'', date:null, rows:[], licensePlate:'', salesStaff:'' };
+let localState = { brand:null, ruleId:null, view:'internal', customerModel:'', date:null, rows:[], licensePlate:'', salesStaff:'', bizNo:null };
 
 function localAddRow(part){
   const brandObj = DB.brands[localState.brand];
@@ -1088,13 +1168,14 @@ function renderLocalPage(){
       <div class="panel-head">
         <div>
           <div class="panel-title">🧩 局部貼膜估價
-            <span class="badge ${localState.view==='internal'?'internal':'external'}">${localState.view==='internal'?'對內版（含成本/毛利）':'對外版（客戶版）'}</span>
+            <span class="badge ${localState.view==='internal'?'internal':(localState.view==='business'?'internal':'external')}">${localState.view==='internal'?'對內版（含成本/毛利）':(localState.view==='business'?'對業務版（業務用）':'對外版（客戶版）')}</span>
           </div>
           <div class="panel-sub">不分車型大小；部位/使用米數/工時/售價來自系統設定的部位目錄，選規格只影響材料成本（同廠商同類別售價共用）</div>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn no-print ${localState.view==='internal'?'primary':''}" id="lcInternal">對內版</button>
           <button class="btn no-print ${localState.view==='external'?'primary':''}" id="lcExternal">對外版</button>
+          <button class="btn no-print ${localState.view==='business'?'primary':''}" id="lcBusiness">對業務版</button>
           <button class="btn no-print" id="lcClearBtn">🗑 清空工單</button>
           <button class="btn no-print" id="lcPrintBtn">🖨️ 列印/PDF</button>
         </div>
@@ -1106,16 +1187,17 @@ function renderLocalPage(){
         </label>
         <label class="field"><span style="display:inline-flex;align-items:center;">折扣規則（局部・${localState.brand}品牌）<span class="info-dot" data-tip="只有「迎風面」「天橋(屋頂)」這兩個部位有定額招攬獎金，其餘小部位可套用折扣售價，但沒有獎金">!</span></span>
           ${ruleSelectHtml('lcRule', rules, localState.ruleId)}
-        </label>` : `
+        </label>` : (localState.view==='external' ? `
         <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${localState.brand}</div></div>
         <label class="field">客戶車款（可留白）
           <input type="text" id="lcCustomerModel" value="${localState.customerModel||''}" placeholder="填寫客戶實際車款">
         </label>
         <label class="field">日期
           <input type="date" id="lcDate" value="${localState.date}">
-        </label>`}
+        </label>` : '')}
       </div>
       ${localState.view==='external' ? `<div class="panel-sub" style="margin-bottom:14px;">對外版為對內版設定完成後的唯讀快照，若要新增/刪除部位或更改廠商規格請切回對內版</div>` : ''}
+      ${localState.view==='business' ? `<div class="panel-sub" style="margin-bottom:14px;">對業務版為對內版設定完成後的唯讀快照，若要新增/刪除部位或更改廠商規格請切回對內版</div>` : ''}
       <div id="localTableWrap"></div>
       ${localState.view==='internal' ? `<button class="btn sm no-print" id="lcAddRowBtn" style="margin-top:12px;">＋ 新增部位列</button>` : ''}
     </div>
@@ -1123,10 +1205,11 @@ function renderLocalPage(){
 
   document.getElementById('lcInternal').onclick=()=>{localState.view='internal';renderLocalPage();};
   document.getElementById('lcExternal').onclick=()=>{localState.view='external';renderLocalPage();};
+  document.getElementById('lcBusiness').onclick=()=>{localState.view='business';renderLocalPage();};
   document.getElementById('lcPrintBtn').onclick=()=>{
     const missing = validateLocalBeforePrint();
     if(missing.length){ showMissingFieldsModal(missing); return; }
-    window.print();
+    printQuote(localState.view==='business' ? 'portrait' : 'landscape');
   };
   const lcBrandSel = document.getElementById('lcBrand');
   if(lcBrandSel) lcBrandSel.onchange = e=>{
@@ -1157,12 +1240,59 @@ function renderLocalPage(){
   renderLocalTable();
 }
 
+// 對業務版：逐列列出部位/OP code，價格只顯示表定售價與75折(業務成本價)，不顯示零件/工資拆分
+function renderLocalBusinessBlock(wrap, ctx){
+  const {brand, rules} = ctx;
+  if(!localState.bizNo) localState.bizNo = nextBizNo();
+  let totalList=0, totalBench=0, anyList=false, anyBench=false;
+
+  const rowsHtml = localState.rows.map(row=>{
+    const listPrice = DB.local.price[row.part]?.[brand]?.[row.category];
+    const bench = calcBenchmarkPrice(listPrice, rules);
+    if(listPrice!=null){ totalList+=listPrice; anyList=true; }
+    if(bench.inclTax!=null){ totalBench+=bench.inclTax; anyBench=true; }
+    const opLine = buildOpCodeLine({scope:'local', part:row.part, brand, category:row.category, material:row.material, rowId:row.id+'-biz', manualText:row.opManual});
+    return `
+      <div style="padding:12px 0;border-bottom:1px solid var(--line-soft);">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+          <span class="tag tag-amber">${opLine.code}</span>
+          <span class="op-copy-text mono" style="text-align:left;font-weight:700;color:var(--amber);">${opLineFullText(opLine)}</span>
+        </div>
+        <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:baseline;margin-bottom:6px;">
+          <div><span class="panel-sub" style="margin:0;">表定售價（含稅）</span> <span class="mono" style="font-weight:700;">${listPrice!=null?fmt(listPrice):'<span class="placeholder-val">—</span>'}</span></div>
+          <div><span class="panel-sub" style="margin:0;">75折（含稅・業務成本價）</span> <span class="mono" style="font-weight:700;color:var(--amber);">${bench.inclTax!=null?fmt(bench.inclTax):'<span class="placeholder-val">—</span>'}</span></div>
+        </div>
+        <div class="panel-sub" style="margin:0;">帳務：${row.accountType||'<span class="placeholder-val">未選擇</span>'}　　付款對象：${row.paymentTarget||'<span class="placeholder-val">未選擇</span>'}</div>
+      </div>
+    `;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div class="panel-sub" style="margin:0;">日期：${localState.date||todayStr()}</div>
+      <div class="panel-sub" style="margin:0;">編號：${localState.bizNo}</div>
+    </div>
+    <div class="field" style="margin-bottom:16px;"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${brand}</div></div>
+    ${rowsHtml}
+    <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:baseline;margin:14px 0;padding-top:12px;border-top:2px solid var(--amber-dim);">
+      <div><span class="panel-sub" style="margin:0;">合計 表定售價（含稅）</span> <span class="mono" style="font-weight:700;font-size:16px;">${anyList?fmt(totalList):'—'}</span></div>
+      <div><span class="panel-sub" style="margin:0;">合計 75折（含稅）</span> <span class="mono" style="font-weight:700;font-size:16px;color:var(--amber);">${anyBench?fmt(totalBench):'—'}</span></div>
+    </div>
+    <div class="panel-sub" style="margin:0;">車牌(或車身碼)：${localState.licensePlate?`<b class="biz-highlight">${localState.licensePlate}</b>`:'<span class="placeholder-val">未填寫</span>'}　　業務/接待人員：${localState.salesStaff?`<b class="biz-highlight">${localState.salesStaff}</b>`:'<span class="placeholder-val">未填寫</span>'}</div>
+  `;
+}
+
 function renderLocalTable(){
   const wrap = document.getElementById('localTableWrap');
   const { brand, view } = localState;
   const brandObj = DB.brands[brand];
   const rules = DB.local.discountRules[brand] || [];
   const rule = rules.find(r=>r.id===localState.ruleId) || rules[0];
+
+  if(view==='business'){
+    renderLocalBusinessBlock(wrap, {brand, rules});
+    return;
+  }
 
   let totals = {materialCost:0, laborCost:0, installBonus:0, listPrice:0, inclTax:0, exclTax:0, bonus:0, profit:0};
   let any = {materialCost:false, exclTax:false};
@@ -2264,9 +2394,9 @@ function showModule(module){
   });
   document.getElementById('quoteNav').hidden = module!=='quote';
   document.getElementById('homeBackLink').hidden = module==='home';
-  document.getElementById('brandText').innerHTML = module==='quote' ? '🦏 貼膜報價系統 <span class="tag">20260810 v5</span>'
+  document.getElementById('brandText').innerHTML = module==='quote' ? '🦏 貼膜報價系統 <span class="tag">20260904 v2</span>'
     : module==='vehicle' ? '🚗 車型查詢小模組'
-    : '🔧 車體工藝中心系統 <span class="tag">20260810 v5</span>';
+    : '🔧 車體工藝中心系統 <span class="tag">20260904 v2</span>';
   if(module==='home') renderHomePage();
   if(module==='vehicle') renderVehiclePage();
   if(module==='quote') activatePage('wholecar');
