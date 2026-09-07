@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 
@@ -24,6 +25,9 @@ app.use('/api/auth', authRoutes);
 // 讀取（GET）公開，任何有連結的人都能查詢/報價；寫入/還原/匯入需要密碼解鎖（見 settingsResource.js）
 app.use('/api/vehicle-catalog', makeSettingsRouter(vehicleCatalogRepo));
 app.use('/api/quote-settings', makeSettingsRouter(quoteSettingsRepo));
+
+// 前端靜態檔案：與 API 部署在同一個 Cloud Run service，同源（frontend 的 API_BASE 固定用 "/api" 相對路徑）
+app.use(express.static(path.join(__dirname, '../public')));
 
 app.use((req, res) => res.status(404).json({ error: '找不到此路徑' }));
 

@@ -1,8 +1,8 @@
 # 後台設定資料庫 API（方案 B）
 
-依照 [`docs/backend-database-spec.md`](../docs/backend-database-spec.md) 方案 B（正規化關聯式資料庫）實作，使用 **PostgreSQL**，可部署到 **GCP Cloud Run + Cloud SQL**（見 [`../deploy/gcp-deploy.md`](../deploy/gcp-deploy.md)）。
+依照 [`docs/backend-database-spec.md`](../docs/backend-database-spec.md) 方案 B（正規化關聯式資料庫）實作，使用 **PostgreSQL**，已部署在 **GCP Cloud Run + Cloud SQL**（正式環境唯一基準見 [`../docs/gcp-deploy.md`](../docs/gcp-deploy.md)）。
 
-供 `frontend/quote-system-v14.html`（單一入口 html，內含常用系統首頁、貼膜報價系統、車型查詢小模組佔位）集中存放設定資料。車型查詢小模組目前僅為預留頁面，尚未接後端。
+前端 `public/index.html`（單一入口 html，內含常用系統首頁、貼膜報價系統、車型查詢小模組佔位）跟這個 API **部署在同一個 Cloud Run service**（`express.static` 直接服務這個資料夾，見 `src/server.js`），同源共用設定資料。車型查詢小模組目前僅為預留頁面，尚未接後端。
 
 ## 存取模式：查詢公開、設定要密碼
 
@@ -24,6 +24,8 @@ npm run migrate             # 建立資料表（可重複執行，不會清空�
 npm run create-user -- admin 你想要的密碼 admin   # 建立系統設定密碼
 npm start                   # 預設監聽 http://localhost:4000
 ```
+
+啟動後瀏覽器打開 `http://localhost:4000/` 就會看到前端（`public/index.html`），前後端同源，`API_BASE = "/api"` 相對路徑會自動生效。**不要**直接雙擊 `public/index.html` 用 `file://` 開啟測試——相對路徑在 `file://` 底下解析不到。
 
 ## 環境變數（`.env`）
 
@@ -62,8 +64,8 @@ npm run create-user -- <帳號名稱，隨意> <密碼> admin
 
 底層資料已正規化到 PostgreSQL 資料表（見 `sql/schema.sql`：`vehicle_brands`/`vehicles`、`qs_brands`/`qs_materials`/`qs_material_rolls`/`qs_whole_car_price`/`qs_local_part_price`/`qs_discount_rules`/`qs_parts`/`qs_vehicle_groups`/`qs_overrides`/`qs_system_settings`（含 `parts_ratio_percent` 零件/工資拆分比例）/`qs_op_codes`/`qs_op_code_specific_parts` 等），API 對前端仍呈現「整包 JSON 讀寫」的形狀，讓前端維持原本簡單的 `loadDB()`/`saveDB()` 心智模型；每次寫入同時會在 `settings_history` 留一份快照供備份／還原。
 
-> `frontend/quote-system-v14.html` 目前對應的是 2026-08-10 版（內部代號 v16／畫面上顯示「20260810 v5」）的資料格式，包含：全車使用米數依產品類別（犀牛皮類／改色膜類）分開儲存（`qs_vehicle_groups.usage_rhino`/`usage_color`）、OP代碼設定（`qs_op_codes`/`qs_op_code_specific_parts`）。之後若你在這份檔案上繼續加新欄位，記得同步更新 `sql/schema.sql` 與 `src/repositories/quoteSettings.js` 的組裝/拆解邏輯，否則新欄位不會被存進資料庫。
+> `public/index.html` 目前包含：全車使用米數依產品類別（犀牛皮類／改色膜類）分開儲存（`qs_vehicle_groups.usage_rhino`/`usage_color`）、OP代碼設定（`qs_op_codes`/`qs_op_code_specific_parts`）、零件/工資拆分比例（`qs_system_settings.parts_ratio_percent`）、對業務版報價編號（`qs_system_settings.biz_quote_seq`）。之後若在這份檔案上繼續加新欄位，記得同步更新 `sql/schema.sql`（新表用 `CREATE TABLE IF NOT EXISTS`、既有表新欄位另外加 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`，見 `docs/gcp-deploy.md`「Schema 異動規則」）與 `src/repositories/quoteSettings.js` 的組裝/拆解邏輯，否則新欄位不會被存進資料庫。
 
 ## 部署到 GCP
 
-見 [`../deploy/gcp-deploy.md`](../deploy/gcp-deploy.md)：Cloud SQL for PostgreSQL + Cloud Run，透過 Secret Manager 管理 `JWT_SECRET`／資料庫密碼。
+正式環境已經建立並在運作中，唯一基準見 [`../docs/gcp-deploy.md`](../docs/gcp-deploy.md)：資源清單、標準版更流程、Schema 異動規則。**版更時不得重建 Cloud SQL、Secret Manager 或 Service Account**，只需要 `gcloud run deploy body-craft-management-system --source .`。
