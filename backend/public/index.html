@@ -447,9 +447,10 @@ function factoryDB(){
 
 /* =========================================================
    後端連線設定
-   部署時請修改成你實際的後端網址（見 backend/README.md 與 deploy/gcp-deploy.md）
+   正式環境：前後端同源部署在同一個 Cloud Run service，固定用相對路徑，
+   不得改回絕對網址（見 docs/gcp-deploy.md）
    ========================================================= */
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = "/api";
 
 let DB = null;
 let dbVersion = null;
