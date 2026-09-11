@@ -22,8 +22,10 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 
 app.use('/api/auth', authRoutes);
 
-// 讀取（GET）公開，任何有連結的人都能查詢/報價；寫入/還原/匯入需要密碼解鎖（見 settingsResource.js）
-app.use('/api/vehicle-catalog', makeSettingsRouter(vehicleCatalogRepo));
+// 讀取（GET）公開，任何有連結的人都能查詢/報價
+// 車型查詢小模組：連寫入也完全公開、不需密碼——現場人員要能隨時直接修改車款資料
+app.use('/api/vehicle-catalog', makeSettingsRouter(vehicleCatalogRepo, { publicWrite: true }));
+// 貼膜報價系統設定：寫入/還原/匯入需要密碼解鎖（見 settingsResource.js）
 app.use('/api/quote-settings', makeSettingsRouter(quoteSettingsRepo));
 
 // 前端靜態檔案：與 API 部署在同一個 Cloud Run service，同源（frontend 的 API_BASE 固定用 "/api" 相對路徑）

@@ -614,13 +614,10 @@ async function loadVehicleDB(){
       return;
     }
     if(res.status === 404){
-      // 後端尚無資料：使用出廠預設車款清單；已解鎖才寫回後端建立初始版本
+      // 後端尚無資料：使用出廠預設車款清單，直接寫回後端建立初始版本
+      // （車型查詢小模組的寫入不需要密碼，見 docs/gcp-deploy.md）
       vehicleDB = factoryVehicleDB();
-      if(isAdmin()){
-        await saveVehicleDB();
-      } else {
-        try{ localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(vehicleDB)); }catch(e){}
-      }
+      await saveVehicleDB();
       return;
     }
     throw new Error('後端回應異常：' + res.status);
@@ -2488,7 +2485,7 @@ function renderVehiclePage(){
       <div class="panel-head">
         <div>
           <div class="panel-title">📋 車款一覽表</div>
-          <div class="panel-sub">先點廠牌看該廠牌內建車款清單；上方關鍵字搜尋會跨全部廠牌。查詢任何人都能用，新增/編輯/刪除需要先解鎖系統設定密碼。</div>
+          <div class="panel-sub">先點廠牌看該廠牌內建車款清單；上方關鍵字搜尋會跨全部廠牌。任何人都能直接查詢、新增、編輯、刪除，不需要密碼——方便現場人員遇到系統沒有的車款時馬上補上。</div>
         </div>
         <button class="btn primary sm" id="addVehicleBtn">＋ 新增車款</button>
       </div>
@@ -2507,7 +2504,6 @@ function renderVehiclePage(){
   });
 
   document.getElementById('addVehicleBrandBtn').onclick = ()=>{
-    if(!isAdmin()){ showUnlockOverlay(()=> document.getElementById('addVehicleBrandBtn').click()); return; }
     const name = prompt('新增廠牌名稱？');
     if(!name || vehicleDB.brandOrder.includes(name)) return;
     vehicleDB.brandOrder.push(name);
@@ -2515,7 +2511,6 @@ function renderVehiclePage(){
   };
 
   document.getElementById('addVehicleBtn').onclick = ()=>{
-    if(!isAdmin()){ showUnlockOverlay(()=> document.getElementById('addVehicleBtn').click()); return; }
     const modal = openModal('新增車款', (modalBody)=>{
       modalBody.innerHTML = `
         <label class="field">廠牌
@@ -2600,7 +2595,6 @@ function renderVehicleTable(){
 
   wrap.querySelectorAll('[data-edit-id]').forEach(btn=>{
     btn.onclick = ()=>{
-      if(!isAdmin()){ showUnlockOverlay(()=> btn.click()); return; }
       const v = vehicleDB.vehicles.find(x=>x.id===btn.dataset.editId);
       const modal = openModal(`編輯車款：${v.brand} ${v.model}`, (modalBody)=>{
         modalBody.innerHTML = `
@@ -2634,7 +2628,6 @@ function renderVehicleTable(){
   });
   wrap.querySelectorAll('[data-del-id]').forEach(btn=>{
     btn.onclick = async ()=>{
-      if(!isAdmin()){ showUnlockOverlay(()=> btn.click()); return; }
       const v = vehicleDB.vehicles.find(x=>x.id===btn.dataset.delId);
       if(!confirm(`確定刪除「${v.brand} ${v.model}」？`)) return;
       vehicleDB.vehicles = vehicleDB.vehicles.filter(x=>x.id!==v.id);
