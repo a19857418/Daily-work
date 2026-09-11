@@ -1,6 +1,6 @@
 # Daily-work
 
-車體工藝中心系統：單一 html 前端（`backend/public/index.html`），內含常用系統首頁、貼膜報價系統、車型查詢小模組（預留頁面，尚未開發），跟後端 API 部署在同一個 Cloud Run service（同源），共用同一個後台設定資料庫。規劃來源見 [`docs/backend-database-spec.md`](docs/backend-database-spec.md)。
+車體工藝中心系統：單一 html 前端（`backend/public/index.html`），內含常用系統首頁、貼膜報價系統、車型查詢小模組（依廠牌／關鍵字查詢車款大小歸類），跟後端 API 部署在同一個 Cloud Run service（同源），共用同一個後台設定資料庫。規劃來源見 [`docs/backend-database-spec.md`](docs/backend-database-spec.md)。
 
 > **架構決策**：PostgreSQL 正規化 Schema（方案 B），已部署在 **GCP Cloud Run + Cloud SQL**（正式環境，非規劃中）。存取模式採單純化設計——**查詢/報價完全公開**（任何人有連結就能用），**只有系統設定/編輯功能需要密碼解鎖**。
 
@@ -34,7 +34,7 @@ npm start                     # 預設監聽 http://localhost:4000
 - **查詢/報價任何人都能用，不需登入**；只有「系統設定」需要輸入密碼解鎖（見 `backend/scripts/create-user.js` 建立的密碼），解鎖狀態存在瀏覽器裡，可隨時點一下鎖頭圖示再次鎖上。
 - 若暫時連不到後端，工具會自動退回瀏覽器本機快取的最後一份資料繼續使用，並在畫面右上角顯示「離線快取中」。
 - 系統設定頁提供「匯出設定 JSON／從檔案匯入」，可作備份或手動搬移資料。
-- 車型查詢小模組目前是預留頁面（無實際功能），未來需求確定後會在同一個檔案裡接上。
+- 車型查詢小模組：可依廠牌分頁或關鍵字搜尋車款，顯示車長與大小歸類（小車／一般車／大車／商用車）；查詢任何人都能用，新增／編輯／刪除廠牌與車款需先解鎖系統設定密碼。資料同樣存在後台資料庫（`vehicle_brands`/`vehicles`），跟貼膜報價系統的資料互不影響。
 
 ## 部署到 GCP
 

@@ -82,6 +82,25 @@
   .unlock-box{max-width:320px;}
   .unlock-error{color:var(--red);font-size:12.5px;min-height:16px;}
 
+  .search-row{margin-bottom:6px;}
+  .search-row input{width:100%;max-width:420px;font-size:16px;padding:13px 16px;}
+  .search-row label.field{gap:7px;}
+  .cat-badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:700;}
+  .cat-badge.小車{background:#16281f;color:var(--green);}
+  .cat-badge.一般車{background:#1c2440;color:var(--violet);}
+  .cat-badge.大車{background:#2c2416;color:var(--amber);}
+  .cat-badge.商用車{background:#2c1f18;color:var(--red);}
+  .result-count{color:var(--text-dim);font-size:12.5px;margin-bottom:10px;}
+  .row-actions{display:flex;gap:2px;justify-content:flex-end;opacity:.45;transition:opacity .15s;}
+  tr:hover .row-actions{opacity:1;}
+  .icon-btn{
+    background:transparent;border:1px solid transparent;color:var(--text-faint);
+    width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;
+    display:inline-flex;align-items:center;justify-content:center;transition:.12s;
+  }
+  .icon-btn:hover{background:var(--panel-2);border-color:var(--line);color:var(--text);}
+  .icon-btn.danger:hover{color:var(--red);border-color:#6b3a24;}
+
   main{max-width:1320px;margin:0 auto;padding:24px;}
   [hidden]{display:none !important;}
 
@@ -560,6 +579,81 @@ async function saveDB(){
     if(!res.ok) throw new Error('儲存失敗：' + res.status);
     const json = await res.json();
     dbVersion = json.version;
+    setSyncTag('ok', '已同步 · ' + nowHM());
+  }catch(e){
+    console.error(e);
+    setSyncTag('err', '離線快取中');
+    toast('⚠ 儲存失敗，已存於本機，恢復連線後請重新整理再試');
+  }
+}
+
+/* =========================================================
+   車型查詢小模組（獨立資料，跟犀牛皮報價系統的 DB 無關，
+   後端對應 /api/vehicle-catalog，見 docs/gcp-deploy.md）
+   ========================================================= */
+const CAT_LIST = ["小車","一般車","大車","商用車"];
+const VEHICLE_STORAGE_KEY = "vehicle-catalog-cache";
+function factoryVehicleDB(){
+  return {
+    brandOrder: ["Toyota", "CMC/Mitsubishi", "Lexus", "Honda", "M.Benz", "Hyundai", "BMW", "Tesla", "Mazda", "Nissan", "Ford", "Kia", "Volkswagen", "Suzuki", "MG", "Skoda", "Porsche", "Volvo", "Luxgen", "Peugeot", "Audi", "Mini", "Land Rover", "Isuzu", "Subaru"],
+    vehicles: [{"id": "v1", "brand": "Toyota", "model": "Yaris Cross", "length": "4.3米", "cat": "小車"}, {"id": "v2", "brand": "Toyota", "model": "Corolla Cross", "length": "4.5米", "cat": "一般車"}, {"id": "v3", "brand": "Toyota", "model": "RAV4", "length": "4.6米", "cat": "一般車"}, {"id": "v4", "brand": "Toyota", "model": "Corolla Altis", "length": "4.6米", "cat": "一般車"}, {"id": "v5", "brand": "Toyota", "model": "Sienta", "length": "4.3米", "cat": "小車"}, {"id": "v6", "brand": "Toyota", "model": "Camry", "length": "4.9米", "cat": "大車"}, {"id": "v7", "brand": "Toyota", "model": "Crown", "length": "5.0米", "cat": "大車"}, {"id": "v8", "brand": "Toyota", "model": "Alphard", "length": "5.0米", "cat": "大車"}, {"id": "v9", "brand": "Toyota", "model": "GR Yaris", "length": "4.0米", "cat": "小車"}, {"id": "v10", "brand": "Toyota", "model": "GR86", "length": "4.3米", "cat": "小車"}, {"id": "v11", "brand": "Toyota", "model": "Town Ace", "length": "4.0米", "cat": "商用車"}, {"id": "v12", "brand": "Toyota", "model": "Hiace", "length": "5.3米", "cat": "商用車"}, {"id": "v13", "brand": "Toyota", "model": "Granvia", "length": "5.3米", "cat": "商用車"}, {"id": "v14", "brand": "Toyota", "model": "Hilux", "length": "5.3米", "cat": "商用車"}, {"id": "v15", "brand": "CMC/Mitsubishi", "model": "Veryca (中華菱利 / J Space)", "length": "4.2米", "cat": "商用車"}, {"id": "v16", "brand": "CMC/Mitsubishi", "model": "Delica (中華得利卡)", "length": "4.8米", "cat": "商用車"}, {"id": "v17", "brand": "CMC/Mitsubishi", "model": "Zinger", "length": "4.7米", "cat": "一般車"}, {"id": "v18", "brand": "CMC/Mitsubishi", "model": "Outlander", "length": "4.7米", "cat": "一般車"}, {"id": "v19", "brand": "CMC/Mitsubishi", "model": "Eclipse Cross", "length": "4.5米", "cat": "一般車"}, {"id": "v20", "brand": "CMC/Mitsubishi", "model": "Colt Plus", "length": "4.4米", "cat": "一般車"}, {"id": "v21", "brand": "CMC/Mitsubishi", "model": "堅達 Canter", "length": "5.0米", "cat": "商用車"}, {"id": "v22", "brand": "Lexus", "model": "LBX", "length": "4.2米", "cat": "小車"}, {"id": "v23", "brand": "Lexus", "model": "UX", "length": "4.5米", "cat": "一般車"}, {"id": "v24", "brand": "Lexus", "model": "NX", "length": "4.7米", "cat": "一般車"}, {"id": "v25", "brand": "Lexus", "model": "RX", "length": "4.9米", "cat": "大車"}, {"id": "v26", "brand": "Lexus", "model": "GX", "length": "5.0米", "cat": "大車"}, {"id": "v27", "brand": "Lexus", "model": "LX", "length": "5.1米", "cat": "大車"}, {"id": "v28", "brand": "Lexus", "model": "ES", "length": "5.0米", "cat": "大車"}, {"id": "v29", "brand": "Lexus", "model": "IS", "length": "4.7米", "cat": "一般車"}, {"id": "v30", "brand": "Lexus", "model": "LS", "length": "5.2米", "cat": "大車"}, {"id": "v31", "brand": "Lexus", "model": "LM", "length": "5.1米", "cat": "商用車"}, {"id": "v32", "brand": "Honda", "model": "FIT", "length": "4.0米", "cat": "小車"}, {"id": "v33", "brand": "Honda", "model": "HR-V", "length": "4.3米", "cat": "小車"}, {"id": "v34", "brand": "Honda", "model": "CR-V", "length": "4.7米", "cat": "一般車"}, {"id": "v35", "brand": "Honda", "model": "Civic", "length": "4.5米", "cat": "一般車"}, {"id": "v36", "brand": "M.Benz", "model": "A-Class", "length": "4.4米", "cat": "一般車"}, {"id": "v37", "brand": "M.Benz", "model": "B-Class", "length": "4.4米", "cat": "一般車"}, {"id": "v38", "brand": "M.Benz", "model": "CLA", "length": "4.7米", "cat": "一般車"}, {"id": "v39", "brand": "M.Benz", "model": "C-Class", "length": "4.8米", "cat": "一般車"}, {"id": "v40", "brand": "M.Benz", "model": "E-Class", "length": "4.9米", "cat": "大車"}, {"id": "v41", "brand": "M.Benz", "model": "S-Class", "length": "5.3米", "cat": "大車"}, {"id": "v42", "brand": "M.Benz", "model": "GLA", "length": "4.4米", "cat": "一般車"}, {"id": "v43", "brand": "M.Benz", "model": "GLB", "length": "4.6米", "cat": "一般車"}, {"id": "v44", "brand": "M.Benz", "model": "GLC", "length": "4.7米", "cat": "一般車"}, {"id": "v45", "brand": "M.Benz", "model": "GLE", "length": "4.9米", "cat": "大車"}, {"id": "v46", "brand": "M.Benz", "model": "GLS", "length": "5.2米", "cat": "大車"}, {"id": "v47", "brand": "M.Benz", "model": "G-Class", "length": "4.8米", "cat": "大車"}, {"id": "v48", "brand": "M.Benz", "model": "V-Class / Vito Tourer", "length": "5.2米", "cat": "商用車"}, {"id": "v49", "brand": "Hyundai", "model": "Venue", "length": "4.0米", "cat": "小車"}, {"id": "v50", "brand": "Hyundai", "model": "Tucson L", "length": "4.6米", "cat": "一般車"}, {"id": "v51", "brand": "Hyundai", "model": "Santa Fe", "length": "4.8米", "cat": "大車"}, {"id": "v52", "brand": "Hyundai", "model": "Ioniq 5", "length": "4.6米", "cat": "一般車"}, {"id": "v53", "brand": "Hyundai", "model": "Ioniq 6", "length": "4.9米", "cat": "大車"}, {"id": "v54", "brand": "Hyundai", "model": "Staria", "length": "5.3米", "cat": "商用車"}, {"id": "v55", "brand": "Hyundai", "model": "Porter (小霸王)", "length": "5.2米", "cat": "商用車"}, {"id": "v56", "brand": "BMW", "model": "1 Series", "length": "4.3米", "cat": "小車"}, {"id": "v57", "brand": "BMW", "model": "2 Series Active Tourer / Gran Coupe", "length": "4.4米", "cat": "一般車"}, {"id": "v58", "brand": "BMW", "model": "3 Series", "length": "4.7米", "cat": "一般車"}, {"id": "v59", "brand": "BMW", "model": "4 Series", "length": "4.8米", "cat": "一般車"}, {"id": "v60", "brand": "BMW", "model": "5 Series", "length": "5.1米", "cat": "大車"}, {"id": "v61", "brand": "BMW", "model": "7 Series", "length": "5.4米", "cat": "大車"}, {"id": "v62", "brand": "BMW", "model": "X1 / iX1", "length": "4.5米", "cat": "一般車"}, {"id": "v63", "brand": "BMW", "model": "X3 / iX3", "length": "4.7米", "cat": "一般車"}, {"id": "v64", "brand": "BMW", "model": "X4", "length": "4.8米", "cat": "一般車"}, {"id": "v65", "brand": "BMW", "model": "X5", "length": "4.9米", "cat": "大車"}, {"id": "v66", "brand": "BMW", "model": "X6", "length": "4.9米", "cat": "大車"}, {"id": "v67", "brand": "BMW", "model": "X7", "length": "5.2米", "cat": "大車"}, {"id": "v68", "brand": "BMW", "model": "iX", "length": "5.0米", "cat": "大車"}, {"id": "v69", "brand": "Tesla", "model": "Model 3", "length": "4.7米", "cat": "一般車"}, {"id": "v70", "brand": "Tesla", "model": "Model Y", "length": "4.8米", "cat": "一般車"}, {"id": "v71", "brand": "Tesla", "model": "Model S", "length": "5.0米", "cat": "大車"}, {"id": "v72", "brand": "Tesla", "model": "Model X", "length": "5.1米", "cat": "大車"}, {"id": "v73", "brand": "Mazda", "model": "Mazda 2", "length": "4.1米", "cat": "小車"}, {"id": "v74", "brand": "Mazda", "model": "Mazda 3", "length": "4.5米", "cat": "一般車"}, {"id": "v75", "brand": "Mazda", "model": "Mazda 6", "length": "4.9米", "cat": "大車"}, {"id": "v76", "brand": "Mazda", "model": "CX-3", "length": "4.3米", "cat": "小車"}, {"id": "v77", "brand": "Mazda", "model": "CX-30", "length": "4.4米", "cat": "一般車"}, {"id": "v78", "brand": "Mazda", "model": "CX-5", "length": "4.6米", "cat": "一般車"}, {"id": "v79", "brand": "Mazda", "model": "CX-60", "length": "4.7米", "cat": "一般車"}, {"id": "v80", "brand": "Mazda", "model": "CX-90", "length": "5.1米", "cat": "大車"}, {"id": "v81", "brand": "Nissan", "model": "Tiida", "length": "4.4米", "cat": "一般車"}, {"id": "v82", "brand": "Nissan", "model": "Sentra", "length": "4.6米", "cat": "一般車"}, {"id": "v83", "brand": "Nissan", "model": "Kicks", "length": "4.3米", "cat": "小車"}, {"id": "v84", "brand": "Nissan", "model": "X-Trail", "length": "4.7米", "cat": "一般車"}, {"id": "v85", "brand": "Nissan", "model": "Ariya", "length": "4.6米", "cat": "一般車"}, {"id": "v86", "brand": "Nissan", "model": "Juke", "length": "4.2米", "cat": "小車"}, {"id": "v87", "brand": "Ford", "model": "Focus", "length": "4.4米", "cat": "一般車"}, {"id": "v88", "brand": "Ford", "model": "Kuga", "length": "4.6米", "cat": "一般車"}, {"id": "v89", "brand": "Ford", "model": "Mustang Mach-E", "length": "4.7米", "cat": "一般車"}, {"id": "v90", "brand": "Ford", "model": "Mustang", "length": "4.8米", "cat": "大車"}, {"id": "v91", "brand": "Ford", "model": "Ranger", "length": "5.4米", "cat": "商用車"}, {"id": "v92", "brand": "Ford", "model": "Tourneo Custom (旅行家)", "length": "5.3米", "cat": "商用車"}, {"id": "v93", "brand": "Ford", "model": "Tourneo Connect (旅玩家)", "length": "4.9米", "cat": "商用車"}, {"id": "v94", "brand": "Kia", "model": "Picanto", "length": "3.6米", "cat": "小車"}, {"id": "v95", "brand": "Kia", "model": "Stonic", "length": "4.1米", "cat": "小車"}, {"id": "v96", "brand": "Kia", "model": "Ceed Sportswagon", "length": "4.6米", "cat": "一般車"}, {"id": "v97", "brand": "Kia", "model": "Sportage", "length": "4.7米", "cat": "一般車"}, {"id": "v98", "brand": "Kia", "model": "Sorento", "length": "4.8米", "cat": "大車"}, {"id": "v99", "brand": "Kia", "model": "EV6", "length": "4.7米", "cat": "一般車"}, {"id": "v100", "brand": "Kia", "model": "EV9", "length": "5.0米", "cat": "大車"}, {"id": "v101", "brand": "Kia", "model": "Carnival", "length": "5.2米", "cat": "大車"}, {"id": "v102", "brand": "Kia", "model": "K2500 (卡旺)", "length": "5.1米", "cat": "商用車"}, {"id": "v103", "brand": "Volkswagen", "model": "Polo", "length": "4.1米", "cat": "小車"}, {"id": "v104", "brand": "Volkswagen", "model": "Golf", "length": "4.3米", "cat": "小車"}, {"id": "v105", "brand": "Volkswagen", "model": "T-Cross", "length": "4.1米", "cat": "小車"}, {"id": "v106", "brand": "Volkswagen", "model": "T-Roc", "length": "4.2米", "cat": "小車"}, {"id": "v107", "brand": "Volkswagen", "model": "Tiguan", "length": "4.5米", "cat": "一般車"}, {"id": "v108", "brand": "Volkswagen", "model": "Tiguan Allspace", "length": "4.7米", "cat": "一般車"}, {"id": "v109", "brand": "Volkswagen", "model": "Arteon", "length": "4.9米", "cat": "大車"}, {"id": "v110", "brand": "Volkswagen", "model": "Caddy", "length": "4.9米", "cat": "商用車"}, {"id": "v111", "brand": "Volkswagen", "model": "T6.1 / T7 Multivan / California", "length": "5.0米", "cat": "商用車"}, {"id": "v112", "brand": "Volkswagen", "model": "Crafter", "length": "6.0米", "cat": "商用車"}, {"id": "v113", "brand": "Suzuki", "model": "Ignis", "length": "3.7米", "cat": "小車"}, {"id": "v114", "brand": "Suzuki", "model": "Swift", "length": "3.9米", "cat": "小車"}, {"id": "v115", "brand": "Suzuki", "model": "Jimny", "length": "3.6米", "cat": "小車"}, {"id": "v116", "brand": "Suzuki", "model": "S-Cross", "length": "4.3米", "cat": "小車"}, {"id": "v117", "brand": "Suzuki", "model": "Vitara", "length": "4.2米", "cat": "小車"}, {"id": "v118", "brand": "Suzuki", "model": "Carry", "length": "4.2米", "cat": "商用車"}, {"id": "v119", "brand": "MG", "model": "ZS", "length": "4.3米", "cat": "小車"}, {"id": "v120", "brand": "MG", "model": "HS", "length": "4.6米", "cat": "一般車"}, {"id": "v121", "brand": "MG", "model": "MG4", "length": "4.3米", "cat": "小車"}, {"id": "v122", "brand": "Skoda", "model": "Fabia", "length": "4.1米", "cat": "小車"}, {"id": "v123", "brand": "Skoda", "model": "Kamiq", "length": "4.2米", "cat": "小車"}, {"id": "v124", "brand": "Skoda", "model": "Scala", "length": "4.4米", "cat": "一般車"}, {"id": "v125", "brand": "Skoda", "model": "Octavia", "length": "4.7米", "cat": "一般車"}, {"id": "v126", "brand": "Skoda", "model": "Karoq", "length": "4.4米", "cat": "一般車"}, {"id": "v127", "brand": "Skoda", "model": "Kodiaq", "length": "4.7米", "cat": "一般車"}, {"id": "v128", "brand": "Skoda", "model": "Superb", "length": "4.9米", "cat": "大車"}, {"id": "v129", "brand": "Skoda", "model": "Enyaq", "length": "4.6米", "cat": "一般車"}, {"id": "v130", "brand": "Porsche", "model": "718 Cayman / Boxster", "length": "4.4米", "cat": "一般車"}, {"id": "v131", "brand": "Porsche", "model": "911", "length": "4519", "cat": "一般車"}, {"id": "v132", "brand": "Porsche", "model": "Taycan", "length": "5.0米", "cat": "大車"}, {"id": "v133", "brand": "Porsche", "model": "Panamera", "length": "5.0米", "cat": "大車"}, {"id": "v134", "brand": "Porsche", "model": "Macan", "length": "4.7米", "cat": "一般車"}, {"id": "v135", "brand": "Porsche", "model": "Cayenne", "length": "4.9米", "cat": "大車"}, {"id": "v136", "brand": "Volvo", "model": "EX30", "length": "4.2米", "cat": "小車"}, {"id": "v137", "brand": "Volvo", "model": "XC40 / C40", "length": "4.4米", "cat": "一般車"}, {"id": "v138", "brand": "Volvo", "model": "XC60", "length": "4.7米", "cat": "一般車"}, {"id": "v139", "brand": "Volvo", "model": "S60 / V60", "length": "4.8米", "cat": "一般車"}, {"id": "v140", "brand": "Volvo", "model": "XC90", "length": "5.0米", "cat": "大車"}, {"id": "v141", "brand": "Volvo", "model": "S90 / V90 CC", "length": "5.0米", "cat": "大車"}, {"id": "v142", "brand": "Volvo", "model": "EX90", "length": "5.0米", "cat": "大車"}, {"id": "v143", "brand": "Luxgen", "model": "n7", "length": "4.7米", "cat": "一般車"}, {"id": "v144", "brand": "Luxgen", "model": "U6 GT", "length": "4.6米", "cat": "一般車"}, {"id": "v145", "brand": "Luxgen", "model": "URX Neo", "length": "4.7米", "cat": "一般車"}, {"id": "v146", "brand": "Peugeot", "model": "208", "length": "4.1米", "cat": "小車"}, {"id": "v147", "brand": "Peugeot", "model": "2008", "length": "4.3米", "cat": "小車"}, {"id": "v148", "brand": "Peugeot", "model": "308", "length": "4.4米", "cat": "一般車"}, {"id": "v149", "brand": "Peugeot", "model": "3008", "length": "4.5米", "cat": "一般車"}, {"id": "v150", "brand": "Peugeot", "model": "408", "length": "4.7米", "cat": "一般車"}, {"id": "v151", "brand": "Peugeot", "model": "5008", "length": "4.6米", "cat": "一般車"}, {"id": "v152", "brand": "Peugeot", "model": "Rifter / Partner", "length": "4.4米", "cat": "商用車"}, {"id": "v153", "brand": "Peugeot", "model": "Traveller", "length": "5.3米", "cat": "商用車"}, {"id": "v154", "brand": "Audi", "model": "A1", "length": "4.0米", "cat": "小車"}, {"id": "v155", "brand": "Audi", "model": "A3 / S3 / RS3", "length": "4.3米", "cat": "小車"}, {"id": "v156", "brand": "Audi", "model": "A4", "length": "4.8米", "cat": "一般車"}, {"id": "v157", "brand": "Audi", "model": "A5", "length": "4.8米", "cat": "一般車"}, {"id": "v158", "brand": "Audi", "model": "A6", "length": "4.9米", "cat": "大車"}, {"id": "v159", "brand": "Audi", "model": "A7", "length": "5.0米", "cat": "大車"}, {"id": "v160", "brand": "Audi", "model": "A8", "length": "5.3米", "cat": "大車"}, {"id": "v161", "brand": "Audi", "model": "Q2", "length": "4.2米", "cat": "小車"}, {"id": "v162", "brand": "Audi", "model": "Q3", "length": "4.5米", "cat": "一般車"}, {"id": "v163", "brand": "Audi", "model": "Q4 e-tron", "length": "4.6米", "cat": "一般車"}, {"id": "v164", "brand": "Audi", "model": "Q5", "length": "4.7米", "cat": "一般車"}, {"id": "v165", "brand": "Audi", "model": "Q7", "length": "5.1米", "cat": "大車"}, {"id": "v166", "brand": "Audi", "model": "Q8 / Q8 e-tron", "length": "5.0米", "cat": "大車"}, {"id": "v167", "brand": "Mini", "model": "Cooper 3-Door / 5-Door", "length": "3.9米", "cat": "小車"}, {"id": "v168", "brand": "Mini", "model": "Aceman", "length": "4.1米", "cat": "小車"}, {"id": "v169", "brand": "Mini", "model": "Countryman", "length": "4.4米", "cat": "一般車"}, {"id": "v170", "brand": "Mini", "model": "Clubman", "length": "4.3米", "cat": "小車"}, {"id": "v171", "brand": "Land Rover", "model": "Range Rover Evoque", "length": "4.4米", "cat": "一般車"}, {"id": "v172", "brand": "Land Rover", "model": "Discovery Sport", "length": "4.6米", "cat": "一般車"}, {"id": "v173", "brand": "Land Rover", "model": "Range Rover Velar", "length": "4.8米", "cat": "一般車"}, {"id": "v174", "brand": "Land Rover", "model": "Defender 90", "length": "4.6米", "cat": "一般車"}, {"id": "v175", "brand": "Land Rover", "model": "Defender 110", "length": "5.0米", "cat": "大車"}, {"id": "v176", "brand": "Land Rover", "model": "Defender 130", "length": "5.4米", "cat": "大車"}, {"id": "v177", "brand": "Land Rover", "model": "Discovery", "length": "5.0米", "cat": "大車"}, {"id": "v178", "brand": "Land Rover", "model": "Range Rover Sport", "length": "4.9米", "cat": "大車"}, {"id": "v179", "brand": "Land Rover", "model": "Range Rover", "length": "5.1米", "cat": "大車"}, {"id": "v180", "brand": "Isuzu", "model": "N-Series (達利/歡樂跑/NLR/NPR)", "length": "5.2米", "cat": "商用車"}, {"id": "v181", "brand": "Isuzu", "model": "F-Series (FVR/FRR)", "length": "7.0米", "cat": "商用車"}, {"id": "v182", "brand": "Isuzu", "model": "D-Max", "length": "5.3米", "cat": "商用車"}, {"id": "v183", "brand": "Subaru", "model": "Impreza", "length": "4.5米", "cat": "一般車"}, {"id": "v184", "brand": "Subaru", "model": "Crosstrek (XV)", "length": "4.5米", "cat": "一般車"}, {"id": "v185", "brand": "Subaru", "model": "Forester", "length": "4.6米", "cat": "一般車"}, {"id": "v186", "brand": "Subaru", "model": "Outback", "length": "4.9米", "cat": "大車"}, {"id": "v187", "brand": "Subaru", "model": "WRX", "length": "4.7米", "cat": "一般車"}, {"id": "v188", "brand": "Subaru", "model": "BRZ", "length": "4.3米", "cat": "小車"}, {"id": "v189", "brand": "Subaru", "model": "Solterra", "length": "4.7米", "cat": "一般車"}]
+  };
+}
+
+let vehicleDB = null;
+let vehicleDbVersion = null;
+let vehicleState = { brandTab:'全部', keyword:'' };
+
+async function loadVehicleDB(){
+  try{
+    const res = await fetch(`${API_BASE}/vehicle-catalog`, { headers: apiHeaders(false) });
+    if(res.ok){
+      const json = await res.json();
+      vehicleDB = json.data; vehicleDbVersion = json.version;
+      try{ localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(vehicleDB)); }catch(e){}
+      return;
+    }
+    if(res.status === 404){
+      // 後端尚無資料：使用出廠預設車款清單；已解鎖才寫回後端建立初始版本
+      vehicleDB = factoryVehicleDB();
+      if(isAdmin()){
+        await saveVehicleDB();
+      } else {
+        try{ localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(vehicleDB)); }catch(e){}
+      }
+      return;
+    }
+    throw new Error('後端回應異常：' + res.status);
+  }catch(e){
+    console.error(e);
+    let raw = null;
+    try{ raw = localStorage.getItem(VEHICLE_STORAGE_KEY); }catch(err){}
+    vehicleDB = raw ? JSON.parse(raw) : factoryVehicleDB();
+  }
+}
+async function saveVehicleDB(){
+  try{ localStorage.setItem(VEHICLE_STORAGE_KEY, JSON.stringify(vehicleDB)); }catch(e){}
+  setSyncTag('busy', '儲存中…');
+  try{
+    const res = await fetch(`${API_BASE}/vehicle-catalog`, {
+      method: 'PUT',
+      headers: apiHeaders(true),
+      body: JSON.stringify({ expectedVersion: vehicleDbVersion, data: vehicleDB })
+    });
+    if(res.status === 401 || res.status === 403){
+      clearAuth(); updateAuthUI();
+      setSyncTag('err', '離線快取中');
+      toast('⚠ 編輯權限已失效，請重新解鎖後再試一次');
+      return;
+    }
+    if(res.status === 409){
+      setSyncTag('err', '版本衝突');
+      toast('⚠ 資料已被其他裝置更新，請重新整理頁面');
+      return;
+    }
+    if(!res.ok) throw new Error('儲存失敗：' + res.status);
+    const json = await res.json();
+    vehicleDbVersion = json.version;
     setSyncTag('ok', '已同步 · ' + nowHM());
   }catch(e){
     console.error(e);
@@ -2348,7 +2442,7 @@ function renderOpCodesSettings(body){
    ========================================================= */
 const HOME_MODULES = [
   { id:'quote', icon:'🦏', title:'貼膜報價系統', desc:'整台車／局部貼膜／鈑烤估價，含系統設定與後台資料庫同步', badge:'功能 1' },
-  { id:'vehicle', icon:'🚗', title:'車型查詢小模組', desc:'開發中，需求確認後上線', badge:'功能 2・開發中' },
+  { id:'vehicle', icon:'🚗', title:'車型查詢小模組', desc:'依廠牌／關鍵字查詢車款大小歸類，含系統設定與後台資料庫同步', badge:'功能 2' },
 ];
 function renderHomePage(){
   const el = document.getElementById('page-home');
@@ -2380,12 +2474,173 @@ function renderHomePage(){
 }
 function renderVehiclePage(){
   document.getElementById('page-vehicle').innerHTML = `
-    <div class="placeholder-page">
-      <div class="icon">🚧</div>
-      <div class="title">車型查詢小模組開發中</div>
-      <div>功能需求確認後會加入這裡，不會影響貼膜報價系統的資料與設定。</div>
+    <div class="panel">
+      <div class="panel-title" style="margin-bottom:10px;">🔍 快速搜尋車款</div>
+      <div class="panel-sub" style="margin-bottom:12px;">車輛進場時直接打關鍵字（例如「RAV4」），就能快速看到品牌與大小歸類</div>
+      <div class="search-row">
+        <label class="field">
+          <input type="text" id="vehicleKeywordInput" placeholder="輸入車款關鍵字，例如：RAV4、Corolla..." value="${vehicleState.keyword}">
+        </label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">📋 車款一覽表</div>
+          <div class="panel-sub">先點廠牌看該廠牌內建車款清單；上方關鍵字搜尋會跨全部廠牌。查詢任何人都能用，新增/編輯/刪除需要先解鎖系統設定密碼。</div>
+        </div>
+        <button class="btn primary sm" id="addVehicleBtn">＋ 新增車款</button>
+      </div>
+      <div class="pill-tabs" id="vehicleBrandTabs">
+        <button data-brand="全部" class="${vehicleState.brandTab==='全部'?'active':''}">全部</button>
+        ${vehicleDB.brandOrder.map(b=>`<button data-brand="${b}" class="${vehicleState.brandTab===b?'active':''}">${b}</button>`).join('')}
+        <button class="add" id="addVehicleBrandBtn">＋ 新增廠牌</button>
+      </div>
+      <div id="vehicleTableWrap"></div>
     </div>
   `;
+
+  document.getElementById('vehicleKeywordInput').oninput = e=>{ vehicleState.keyword=e.target.value; renderVehicleTable(); };
+  document.querySelectorAll('#vehicleBrandTabs button[data-brand]').forEach(b=>{
+    b.onclick = ()=>{ vehicleState.brandTab = b.dataset.brand; renderVehiclePage(); };
+  });
+
+  document.getElementById('addVehicleBrandBtn').onclick = ()=>{
+    if(!isAdmin()){ showUnlockOverlay(()=> document.getElementById('addVehicleBrandBtn').click()); return; }
+    const name = prompt('新增廠牌名稱？');
+    if(!name || vehicleDB.brandOrder.includes(name)) return;
+    vehicleDB.brandOrder.push(name);
+    saveVehicleDB().then(()=>{ vehicleState.brandTab=name; renderVehiclePage(); });
+  };
+
+  document.getElementById('addVehicleBtn').onclick = ()=>{
+    if(!isAdmin()){ showUnlockOverlay(()=> document.getElementById('addVehicleBtn').click()); return; }
+    const modal = openModal('新增車款', (modalBody)=>{
+      modalBody.innerHTML = `
+        <label class="field">廠牌
+          <select id="mvBrand">${vehicleDB.brandOrder.map(b=>`<option value="${b}" ${vehicleState.brandTab!=='全部'&&b===vehicleState.brandTab?'selected':''}>${b}</option>`).join('')}</select>
+        </label>
+        <label class="field">車款名稱
+          <input type="text" id="mvModel" placeholder="例如：Corolla Cross" style="font-family:'Inter',sans-serif;">
+        </label>
+        <label class="field">車長（約）
+          <input type="text" id="mvLength" placeholder="例如：4.5米">
+        </label>
+        <label class="field">歸類
+          <select id="mvCat">${CAT_LIST.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+        </label>
+        <button class="btn primary" id="mvSubmit" style="align-self:flex-start;">新增</button>
+      `;
+      modalBody.querySelector('#mvSubmit').onclick = async ()=>{
+        const brand = modalBody.querySelector('#mvBrand').value;
+        const model = modalBody.querySelector('#mvModel').value.trim();
+        const length = modalBody.querySelector('#mvLength').value.trim();
+        const cat = modalBody.querySelector('#mvCat').value;
+        if(!model){ alert('請輸入車款名稱'); return; }
+        vehicleDB.vehicles.push({ id:'v'+Date.now()+Math.random().toString(36).slice(2,6), brand, model, length, cat });
+        await saveVehicleDB();
+        vehicleState.brandTab = brand; vehicleState.keyword=''; toast('已新增車款：'+model);
+        modal.close();
+        renderVehiclePage();
+      };
+    });
+  };
+
+  renderVehicleTable();
+}
+
+function renderVehicleTable(){
+  const wrap = document.getElementById('vehicleTableWrap');
+  const kw = vehicleState.keyword.trim().toLowerCase();
+  let list = vehicleDB.vehicles;
+  const searching = !!kw;
+  if(searching){
+    list = list.filter(v => v.model.toLowerCase().includes(kw) || v.brand.toLowerCase().includes(kw));
+  } else if(vehicleState.brandTab !== '全部'){
+    list = list.filter(v => v.brand === vehicleState.brandTab);
+  }
+  const showBrandCol = vehicleState.brandTab==='全部' || searching;
+
+  const countLine = searching ? `<div class="result-count">關鍵字「${vehicleState.keyword}」共找到 ${list.length} 筆</div>` : '';
+
+  if(list.length===0){
+    wrap.innerHTML = `${countLine}<div class="empty-hint">沒有符合的車款，可以點右上角「＋ 新增車款」補上</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    ${countLine}
+    <div class="table-scroll" style="overflow-x:auto;">
+    <table class="data">
+      <tr>
+        ${showBrandCol?'<th style="text-align:left;">廠牌</th>':''}
+        <th style="text-align:left;">車款名稱</th>
+        <th>車長</th>
+        <th>歸類</th>
+        <th></th>
+      </tr>
+      ${list.map(v=>`
+        <tr>
+          ${showBrandCol?`<td style="text-align:left;">${v.brand}</td>`:''}
+          <td style="text-align:left;">${v.model}</td>
+          <td>${v.length||'<span class="empty-hint">—</span>'}</td>
+          <td><span class="cat-badge ${v.cat}">${v.cat}</span></td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" data-edit-id="${v.id}" title="編輯">✎</button>
+              <button class="icon-btn danger" data-del-id="${v.id}" title="刪除">✕</button>
+            </div>
+          </td>
+        </tr>
+      `).join('')}
+    </table>
+    </div>
+  `;
+
+  wrap.querySelectorAll('[data-edit-id]').forEach(btn=>{
+    btn.onclick = ()=>{
+      if(!isAdmin()){ showUnlockOverlay(()=> btn.click()); return; }
+      const v = vehicleDB.vehicles.find(x=>x.id===btn.dataset.editId);
+      const modal = openModal(`編輯車款：${v.brand} ${v.model}`, (modalBody)=>{
+        modalBody.innerHTML = `
+          <label class="field">廠牌
+            <select id="evBrand">${vehicleDB.brandOrder.map(b=>`<option value="${b}" ${b===v.brand?'selected':''}>${b}</option>`).join('')}</select>
+          </label>
+          <label class="field">車款名稱
+            <input type="text" id="evModel" value="${v.model}" style="font-family:'Inter',sans-serif;">
+          </label>
+          <label class="field">車長（約）
+            <input type="text" id="evLength" value="${v.length||''}" placeholder="例如：4.5米">
+          </label>
+          <label class="field">歸類
+            <select id="evCat">${CAT_LIST.map(c=>`<option value="${c}" ${c===v.cat?'selected':''}>${c}</option>`).join('')}</select>
+          </label>
+          <button class="btn primary" id="evSubmit" style="align-self:flex-start;">儲存</button>
+        `;
+        modalBody.querySelector('#evSubmit').onclick = async ()=>{
+          const model = modalBody.querySelector('#evModel').value.trim();
+          if(!model){ alert('請輸入車款名稱'); return; }
+          v.brand = modalBody.querySelector('#evBrand').value;
+          v.model = model;
+          v.length = modalBody.querySelector('#evLength').value.trim();
+          v.cat = modalBody.querySelector('#evCat').value;
+          await saveVehicleDB(); toast('已儲存修改');
+          modal.close();
+          renderVehiclePage();
+        };
+      });
+    };
+  });
+  wrap.querySelectorAll('[data-del-id]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      if(!isAdmin()){ showUnlockOverlay(()=> btn.click()); return; }
+      const v = vehicleDB.vehicles.find(x=>x.id===btn.dataset.delId);
+      if(!confirm(`確定刪除「${v.brand} ${v.model}」？`)) return;
+      vehicleDB.vehicles = vehicleDB.vehicles.filter(x=>x.id!==v.id);
+      await saveVehicleDB(); renderVehicleTable();
+    };
+  });
 }
 function showModule(module){
   document.getElementById('page-home').hidden = module!=='home';
@@ -2461,7 +2716,7 @@ document.getElementById('lockPill').onclick = ()=>{
 };
 
 (async function init(){
-  await loadDB();
+  await Promise.all([loadDB(), loadVehicleDB()]);
   const before = JSON.stringify(DB);
   ensureDiscountDefaults();
   ensureUsageStructure();

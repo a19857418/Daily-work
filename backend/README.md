@@ -2,7 +2,7 @@
 
 依照 [`docs/backend-database-spec.md`](../docs/backend-database-spec.md) 方案 B（正規化關聯式資料庫）實作，使用 **PostgreSQL**，已部署在 **GCP Cloud Run + Cloud SQL**（正式環境唯一基準見 [`../docs/gcp-deploy.md`](../docs/gcp-deploy.md)）。
 
-前端 `public/index.html`（單一入口 html，內含常用系統首頁、貼膜報價系統、車型查詢小模組佔位）跟這個 API **部署在同一個 Cloud Run service**（`express.static` 直接服務這個資料夾，見 `src/server.js`），同源共用設定資料。車型查詢小模組目前僅為預留頁面，尚未接後端。
+前端 `public/index.html`（單一入口 html，內含常用系統首頁、貼膜報價系統、車型查詢小模組）跟這個 API **部署在同一個 Cloud Run service**（`express.static` 直接服務這個資料夾，見 `src/server.js`），同源共用設定資料。車型查詢小模組已接後端（`/api/vehicle-catalog`），資料存在 `vehicle_brands`/`vehicles` 資料表，跟貼膜報價系統的設定資料互不影響。
 
 ## 存取模式：查詢公開、設定要密碼
 
