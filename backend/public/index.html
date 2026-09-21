@@ -1229,19 +1229,20 @@ function renderWholeCarPage(){
             const bonusLabel = r.bonusType==='fixed' ? `定值${fmt(r.bonusValue)}` : `比例${Math.round(r.bonusValue*100)}%`;
             return `<option value="${r.id}" ${r.id===wholeCarState.ruleId?'selected':''}>${r.name}（${Math.round(r.rate*100)}%，獎金${bonusLabel}）</option>`;
           }).join('')}</select>
-        </label>` : (wholeCarState.view==='external' ? `
-        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">車型群組</span><div class="readonly-field">${wholeCarState.group}</div></div>
-        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${wholeCarState.brand}</div></div>
-        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">產品類別</span><div class="readonly-field">${wholeCarState.category}</div></div>
-        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">規格</span><div class="readonly-field">${wholeCarState.material}</div></div>
+        </label>
         <label class="field">客戶車款（可留白）
           <input type="text" id="wcCustomerModel" value="${esc(wholeCarState.customerModel||'')}" placeholder="填寫客戶實際車款">
         </label>
         <label class="field">日期
           <input type="date" id="wcDate" value="${wholeCarState.date}">
-        </label>` : '')}
+        </label>` : (wholeCarState.view==='external' ? `
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">車型群組</span><div class="readonly-field">${esc(wholeCarState.group)}</div></div>
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${esc(wholeCarState.brand)}</div></div>
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">產品類別</span><div class="readonly-field">${esc(wholeCarState.category)}</div></div>
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">規格</span><div class="readonly-field">${esc(wholeCarState.material)}</div></div>
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">客戶車款</span><div class="readonly-field">${wholeCarState.customerModel?esc(wholeCarState.customerModel):'<span class="placeholder-val">（未填寫）</span>'}</div></div>
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">日期</span><div class="readonly-field">${esc(wholeCarState.date)}</div></div>` : '')}
       </div>
-      ${wholeCarState.view==='external' ? `<div class="panel-sub" style="margin-bottom:14px;">對外版為對內版設定完成後的唯讀快照，若要更改車型/材質/規格請切回對內版</div>` : ''}
       ${wholeCarState.view==='business' ? `<div class="panel-sub" style="margin-bottom:14px;">業務留存版為對內版設定完成後的唯讀快照，若要更改車型/材質/規格請切回對內版</div>` : ''}
       <div id="wcResultWrap"></div>
       ${wholeCarState.view==='external' ? externalRemarkTermsHtml(wholeCarState, 'wcExternalRemark') : ''}
@@ -1266,7 +1267,7 @@ function renderWholeCarPage(){
   const cmInp = document.getElementById('wcCustomerModel');
   if(cmInp) cmInp.oninput=e=>{wholeCarState.customerModel=e.target.value;};
   const dInp = document.getElementById('wcDate');
-  if(dInp) dInp.onchange=e=>{wholeCarState.date=e.target.value;renderWholeCarResult();};
+  if(dInp) dInp.onchange=e=>{wholeCarState.date=e.target.value;renderWholeCarPage();};
 
   renderWholeCarResult();
 }
@@ -1293,17 +1294,16 @@ function renderWholeCarResult(view = wholeCarState.view, wrap = document.getElem
     const extIncl = listPrice;
     const extExcl = listPrice!=null ? listPrice/TAX_RATE_DIVISOR() : null;
     wrap.innerHTML = `
-      <div class="panel-sub" style="margin-bottom:10px;">客戶車款：${wholeCarState.customerModel ? esc(wholeCarState.customerModel) : '<span class="placeholder-val">（未填寫）</span>'}</div>
       <table class="data">
-        <tr><th>材質名稱</th><th>施工部位</th><th>未稅售價</th><th>含稅售價</th></tr>
+        <tr><th>材質名稱</th><th>施工部位</th><th>最終規格</th><th>未稅售價</th><th>含稅售價</th></tr>
         <tr>
           <td>${esc(material)}（${esc(brand)}）</td>
           <td>全車</td>
+          <td>${wholeCarState.opManual ? esc(wholeCarState.opManual) : '<span class="placeholder-val">—</span>'}</td>
           <td>${extExcl!=null?fmt(extExcl):'<span class="placeholder-val">尚未輸入</span>'}</td>
           <td>${extIncl!=null?fmt(extIncl):'<span class="placeholder-val">尚未輸入</span>'}</td>
         </tr>
       </table>
-      <div class="panel-sub" style="color:var(--text-faint);font-size:11px;margin-top:6px;">＊未稅／含稅售價一律採「表定售價」換算，不受內部折扣規則影響</div>
     `;
     return;
   }
@@ -1455,16 +1455,17 @@ function renderLocalPage(){
         </label>
         <label class="field"><span style="display:inline-flex;align-items:center;">折扣規則（局部・${localState.brand}品牌）<span class="info-dot" data-tip="只有「迎風面」「天橋(屋頂)」這兩個部位有定額招攬獎金，其餘小部位可套用折扣售價，但沒有獎金">!</span></span>
           ${ruleSelectHtml('lcRule', rules, localState.ruleId)}
-        </label>` : (localState.view==='external' ? `
-        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${localState.brand}</div></div>
+        </label>
         <label class="field">客戶車款（可留白）
           <input type="text" id="lcCustomerModel" value="${esc(localState.customerModel||'')}" placeholder="填寫客戶實際車款">
         </label>
         <label class="field">日期
           <input type="date" id="lcDate" value="${localState.date}">
-        </label>` : '')}
+        </label>` : (localState.view==='external' ? `
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">膜料廠商</span><div class="readonly-field">${esc(localState.brand)}</div></div>
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">客戶車款</span><div class="readonly-field">${localState.customerModel?esc(localState.customerModel):'<span class="placeholder-val">（未填寫）</span>'}</div></div>
+        <div class="field"><span style="color:var(--text-dim);font-weight:600;font-size:12px;">日期</span><div class="readonly-field">${esc(localState.date)}</div></div>` : '')}
       </div>
-      ${localState.view==='external' ? `<div class="panel-sub" style="margin-bottom:14px;">對外版為對內版設定完成後的唯讀快照，若要新增/刪除部位或更改廠商規格請切回對內版</div>` : ''}
       ${localState.view==='business' ? `<div class="panel-sub" style="margin-bottom:14px;">業務留存版為對內版設定完成後的唯讀快照，若要新增/刪除部位或更改廠商規格請切回對內版</div>` : ''}
       <div id="localTableWrap"></div>
       ${localState.view==='internal' ? `<button class="btn sm no-print" id="lcAddRowBtn" style="margin-top:12px;">＋ 新增部位列</button>` : ''}
@@ -1494,7 +1495,7 @@ function renderLocalPage(){
   const cmInp = document.getElementById('lcCustomerModel');
   if(cmInp) cmInp.oninput = e=>{ localState.customerModel=e.target.value; };
   const dInp = document.getElementById('lcDate');
-  if(dInp) dInp.onchange = e=>{ localState.date=e.target.value; renderLocalTable(); };
+  if(dInp) dInp.onchange = e=>{ localState.date=e.target.value; renderLocalPage(); };
   const lcAddRowBtn = document.getElementById('lcAddRowBtn');
   if(lcAddRowBtn) lcAddRowBtn.onclick = ()=>{ localAddRow(); renderLocalTable(); };
   document.getElementById('lcClearBtn').onclick = ()=>{
@@ -1598,6 +1599,7 @@ function renderLocalTable(view = localState.view, wrap = document.getElementById
       return `<tr>
         <td>${esc(row.part)}</td>
         <td>${esc(row.material)}（${esc(brand)}）</td>
+        <td>${row.opManual ? esc(row.opManual) : '<span class="placeholder-val">—</span>'}</td>
         <td>${extExcl!=null?fmt(extExcl):'<span class="placeholder-val">—</span>'}</td>
         <td>${extIncl!=null?fmt(extIncl):'<span class="placeholder-val">—</span>'}</td>
       </tr>`;
@@ -1636,17 +1638,15 @@ function renderLocalTable(view = localState.view, wrap = document.getElementById
   const priceLabel = rule?.name ? `${rule.name}售價` : '業務/接待售價';
 
   const head = view==='external'
-    ? `<tr><th>部位</th><th>材質名稱</th><th>未稅售價</th><th>含稅售價</th></tr>`
+    ? `<tr><th>部位</th><th>材質名稱</th><th>最終規格</th><th>未稅售價</th><th>含稅售價</th></tr>`
     : `<tr><th>部位</th><th>類別</th><th>規格</th><th>使用米數</th><th>工時</th><th>材料成本</th><th>人工成本</th><th>施工獎金</th><th>招攬獎金</th><th>表定售價</th>${isFullPrice?'':`<th>${priceLabel}</th>`}<th>售服毛利</th><th>毛利率</th><th></th></tr>`;
 
   const totalRate = (totals.profit && totals.exclTax) ? totals.profit/totals.exclTax : null;
   const totalRow = view==='external'
-    ? `<tr class="total-row"><td>合計</td><td></td><td>${any.ext?fmt(totals.extExcl):'—'}</td><td>${any.ext?fmt(totals.extIncl):'—'}</td></tr>`
+    ? `<tr class="total-row"><td>合計</td><td></td><td></td><td>${any.ext?fmt(totals.extExcl):'—'}</td><td>${any.ext?fmt(totals.extIncl):'—'}</td></tr>`
     : `<tr class="total-row"><td>合計</td><td></td><td></td><td></td><td></td><td>${any.materialCost?fmt(totals.materialCost):'—'}</td><td>${fmt(totals.laborCost)||'—'}</td><td>${fmt(totals.installBonus)||'—'}</td><td>${fmt(totals.bonus)||'—'}</td><td>${fmt(totals.listPrice)||'—'}</td>${isFullPrice?'':`<td>${fmt(totals.inclTax)||'—'}</td>`}<td>${fmt(totals.profit)||'—'}</td><td>${totalRate!=null?Math.round(totalRate*100)+'%':'—'}</td><td></td></tr>`;
 
-  const dateLine = view==='external' ? `<div class="panel-sub" style="margin-bottom:10px;">客戶車款：${localState.customerModel ? esc(localState.customerModel) : '<span class="placeholder-val">（未填寫）</span>'}</div><div class="panel-sub" style="color:var(--text-faint);font-size:11px;margin-bottom:10px;">＊未稅／含稅售價一律採「表定售價」換算，不受內部折扣規則影響</div>` : '';
-
-  wrap.innerHTML = `${dateLine}<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>${view==='internal'?opCodeBlockHtml(opLines, localState):''}`;
+  wrap.innerHTML = `<div class="table-scroll"><table class="data">${head}${rows}${totalRow}</table></div>${view==='internal'?opCodeBlockHtml(opLines, localState):''}`;
 
   bindOpInfoButtons(wrap, (rowId)=>localState.rows.find(r=>r.id===rowId), renderLocalTable);
   bindOpMetaInputs(wrap, localState);
