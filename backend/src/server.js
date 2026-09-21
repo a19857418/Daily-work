@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const { makeSettingsRouter } = require('./routes/settingsResource');
 const vehicleCatalogRepo = require('./repositories/vehicleCatalog');
 const quoteSettingsRepo = require('./repositories/quoteSettings');
+const quotesRoutes = require('./routes/quotes');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -27,6 +28,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/vehicle-catalog', makeSettingsRouter(vehicleCatalogRepo, { publicWrite: true }));
 // 貼膜報價系統設定：寫入/還原/匯入需要密碼解鎖（見 settingsResource.js）
 app.use('/api/quote-settings', makeSettingsRouter(quoteSettingsRepo));
+// 歷史報價查詢：跟報價頁面本身一樣公開，查詢與新增都不需要密碼
+app.use('/api/quotes', quotesRoutes);
 
 // 前端靜態檔案：與 API 部署在同一個 Cloud Run service，同源（frontend 的 API_BASE 固定用 "/api" 相對路徑）
 app.use(express.static(path.join(__dirname, '../public')));

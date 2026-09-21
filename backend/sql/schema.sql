@@ -154,3 +154,32 @@ CREATE TABLE IF NOT EXISTS qs_op_codes (
 CREATE TABLE IF NOT EXISTS qs_op_code_specific_parts (
   part_id INTEGER PRIMARY KEY REFERENCES qs_parts(id) ON DELETE CASCADE
 );
+
+-- =========================================================
+-- 歷史報價查詢（v17 新增）：每次成功通過防呆並按下列印/PDF，
+-- 就把當下「對內版/對外版/業務留存版」三版的完整快照存一筆，供之後查詢/重印。
+-- snapshot 存的是當時三版已經算好、渲染好的內容，不會因為之後系統設定的價格/材質異動而改變。
+-- 全新環境第一次跑 migrate 用 CREATE TABLE 就會建好，不需要另外 ALTER。
+-- =========================================================
+CREATE TABLE IF NOT EXISTS qs_quotes (
+  id             SERIAL PRIMARY KEY,
+  quote_no       TEXT NOT NULL UNIQUE,
+  quote_type     TEXT NOT NULL CHECK (quote_type IN ('wholecar','local')),
+  license_plate  TEXT,
+  sales_staff    TEXT,
+  customer_model TEXT,
+  quote_date     DATE,
+  valid_until    DATE,
+  snapshot       JSONB NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_quotes_created_at ON qs_quotes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quotes_quote_no ON qs_quotes(quote_no);
+
+-- 報價單編號流水序號：獨立一張表、公開不需密碼即可配號（用 INSERT ... ON CONFLICT 原子遞增，
+-- 不受同時多人使用影響），取代舊版「編號存在系統設定裡、要解鎖才能存回去」的做法，
+-- 避免沒解鎖時編號沒存到後端、下次又從同一號重算，導致不同報價單撞號互相覆蓋。
+CREATE TABLE IF NOT EXISTS qs_quote_seq (
+  date_key TEXT PRIMARY KEY,
+  seq      INTEGER NOT NULL DEFAULT 0
+);
