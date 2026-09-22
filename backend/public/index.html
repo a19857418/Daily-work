@@ -1065,6 +1065,7 @@ function validateWholeCarBeforePrint(){
   if(!wholeCarState.material) missing.push('規格');
   const rules = DB.wholeCar.discountRules[wholeCarState.brand] || [];
   if(!rules.find(r=>r.id===wholeCarState.ruleId)) missing.push('折扣規則');
+  if(!wholeCarState.customerModel || !wholeCarState.customerModel.trim()) missing.push('客戶車款');
   if(!wholeCarState.licensePlate || !wholeCarState.licensePlate.trim()) missing.push('車牌(或車身碼)');
   if(!wholeCarState.salesStaff || !wholeCarState.salesStaff.trim()) missing.push('業務/接待人員');
   if(!wholeCarState.opManual || !wholeCarState.opManual.trim()) missing.push('自填最終規格');
@@ -1077,6 +1078,7 @@ function validateLocalBeforePrint(){
   if(!localState.brand) missing.push('膜料廠商');
   const rules = DB.local.discountRules[localState.brand] || [];
   if(!rules.find(r=>r.id===localState.ruleId)) missing.push('折扣規則');
+  if(!localState.customerModel || !localState.customerModel.trim()) missing.push('客戶車款');
   if(!localState.licensePlate || !localState.licensePlate.trim()) missing.push('車牌(或車身碼)');
   if(!localState.salesStaff || !localState.salesStaff.trim()) missing.push('業務/接待人員');
   const brandObj = DB.brands[localState.brand];
@@ -1231,7 +1233,7 @@ function renderWholeCarPage(){
             return `<option value="${r.id}" ${r.id===wholeCarState.ruleId?'selected':''}>${r.name}（${Math.round(r.rate*100)}%，獎金${bonusLabel}）</option>`;
           }).join('')}</select>
         </label>
-        <label class="field">客戶車款（可留白）
+        <label class="field">客戶車款
           <input type="text" id="wcCustomerModel" value="${esc(wholeCarState.customerModel||'')}" placeholder="填寫客戶實際車款">
         </label>
         <label class="field">日期
@@ -1457,7 +1459,7 @@ function renderLocalPage(){
         <label class="field"><span style="display:inline-flex;align-items:center;">折扣規則（局部・${localState.brand}品牌）<span class="info-dot" data-tip="只有「迎風面」「天橋(屋頂)」這兩個部位有定額招攬獎金，其餘小部位可套用折扣售價，但沒有獎金">!</span></span>
           ${ruleSelectHtml('lcRule', rules, localState.ruleId)}
         </label>
-        <label class="field">客戶車款（可留白）
+        <label class="field">客戶車款
           <input type="text" id="lcCustomerModel" value="${esc(localState.customerModel||'')}" placeholder="填寫客戶實際車款">
         </label>
         <label class="field">日期
