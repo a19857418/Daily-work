@@ -295,7 +295,7 @@
 <div class="topbar">
   <div class="topbar-left">
     <a href="#" class="back-link" id="homeBackLink" hidden>← 返回首頁</a>
-    <div class="brand" id="brandText">🔧 車體工藝中心系統 <span class="tag">20260904 v2</span></div>
+    <div class="brand" id="brandText">🔧 車體工藝中心系統 <span class="tag">20260922 v3</span></div>
   </div>
   <div class="topbar-right">
     <span class="sync-pill busy" id="syncTag">連線中…</span>
@@ -2935,9 +2935,9 @@ function showModule(module){
   });
   document.getElementById('quoteNav').hidden = module!=='quote';
   document.getElementById('homeBackLink').hidden = module==='home';
-  document.getElementById('brandText').innerHTML = module==='quote' ? '🦏 貼膜報價系統 <span class="tag">20260904 v2</span>'
+  document.getElementById('brandText').innerHTML = module==='quote' ? '🦏 貼膜報價系統 <span class="tag">20260922 v3</span>'
     : module==='vehicle' ? '🚗 車型查詢小模組'
-    : '🔧 車體工藝中心系統 <span class="tag">20260904 v2</span>';
+    : '🔧 車體工藝中心系統 <span class="tag">20260922 v3</span>';
   if(module==='home') renderHomePage();
   if(module==='vehicle') renderVehiclePage();
   if(module==='quote') activatePage('wholecar');
