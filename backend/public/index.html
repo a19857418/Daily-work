@@ -1395,7 +1395,7 @@ function renderWholeCarBusinessBlock(wrap, ctx){
         <div class="mono" style="font-size:20px;font-weight:700;color:var(--amber);">${bench.inclTax!=null?fmt(bench.inclTax):'<span class="placeholder-val">尚未設定75折規則</span>'}</div>
       </div>
     </div>
-    <div class="panel-sub" style="margin:0 0 14px;">車牌(或車身碼)：${wholeCarState.licensePlate?`<b class="biz-highlight">${esc(wholeCarState.licensePlate)}</b>`:'<span class="placeholder-val">未填寫</span>'}　　業務/接待人員：${wholeCarState.salesStaff?`<b class="biz-highlight">${esc(wholeCarState.salesStaff)}</b>`:'<span class="placeholder-val">未填寫</span>'}</div>
+    <div class="panel-sub" style="margin:0 0 14px;">客戶車款：${wholeCarState.customerModel?`<b class="biz-highlight">${esc(wholeCarState.customerModel)}</b>`:'<span class="placeholder-val">未填寫</span>'}　　車牌(或車身碼)：${wholeCarState.licensePlate?`<b class="biz-highlight">${esc(wholeCarState.licensePlate)}</b>`:'<span class="placeholder-val">未填寫</span>'}　　業務/接待人員：${wholeCarState.salesStaff?`<b class="biz-highlight">${esc(wholeCarState.salesStaff)}</b>`:'<span class="placeholder-val">未填寫</span>'}</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
       <span class="panel-sub" style="margin:0;white-space:nowrap;">施工代碼(OP code)</span>
       <span class="tag tag-amber">${opLine.code}</span>
@@ -1540,7 +1540,7 @@ function renderLocalBusinessBlock(wrap, ctx){
       <div><span class="panel-sub" style="margin:0;">合計 表定售價（含稅）</span> <span class="mono" style="font-weight:700;font-size:16px;">${anyList?fmt(totalList):'—'}</span></div>
       <div><span class="panel-sub" style="margin:0;">合計 75折（含稅）</span> <span class="mono" style="font-weight:700;font-size:16px;color:var(--amber);">${anyBench?fmt(totalBench):'—'}</span></div>
     </div>
-    <div class="panel-sub" style="margin:0;">車牌(或車身碼)：${localState.licensePlate?`<b class="biz-highlight">${esc(localState.licensePlate)}</b>`:'<span class="placeholder-val">未填寫</span>'}　　業務/接待人員：${localState.salesStaff?`<b class="biz-highlight">${esc(localState.salesStaff)}</b>`:'<span class="placeholder-val">未填寫</span>'}</div>
+    <div class="panel-sub" style="margin:0;">客戶車款：${localState.customerModel?`<b class="biz-highlight">${esc(localState.customerModel)}</b>`:'<span class="placeholder-val">未填寫</span>'}　　車牌(或車身碼)：${localState.licensePlate?`<b class="biz-highlight">${esc(localState.licensePlate)}</b>`:'<span class="placeholder-val">未填寫</span>'}　　業務/接待人員：${localState.salesStaff?`<b class="biz-highlight">${esc(localState.salesStaff)}</b>`:'<span class="placeholder-val">未填寫</span>'}</div>
   `;
 }
 
