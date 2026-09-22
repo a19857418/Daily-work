@@ -1130,6 +1130,7 @@ function externalHeaderHtml(state){
       <span>訂單編號　<b class="mono" style="color:var(--text);">${esc(state.quoteNo||'配號中…')}</b></span>
       <span>報價日期　<b style="color:var(--text);">${esc(state.date||todayStr())}</b></span>
       <span style="color:var(--amber);">價格效期　<b style="color:var(--amber);">${esc(validUntil)}</b></span>
+      <span>車牌(或車身碼)　${state.licensePlate?`<b style="color:var(--text);">${esc(state.licensePlate)}</b>`:'<span class="placeholder-val">未填寫</span>'}</span>
       <span>業務/接待人員　${state.salesStaff?`<b style="color:var(--text);">${esc(state.salesStaff)}</b>`:'<span class="placeholder-val">未填寫</span>'}</span>
     </div>
   `;
