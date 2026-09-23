@@ -10,9 +10,13 @@ PROJECT=ammanage
 REGION=asia-east1
 SERVICE=body-craft-management-system
 
-REVISION=$(gcloud run services describe "${SERVICE}" \
-  --project="${PROJECT}" --region="${REGION}" \
-  --format=json | python3 -c "
+if ! DESCRIBE_JSON=$(gcloud run services describe "${SERVICE}" \
+  --project="${PROJECT}" --region="${REGION}" --format=json); then
+  echo "讀取服務狀態失敗，請確認：已用 gcloud 登入、專案是 ${PROJECT}、服務名稱/區域正確"
+  exit 1
+fi
+
+REVISION=$(echo "${DESCRIBE_JSON}" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 for t in data.get('status', {}).get('traffic', []):
