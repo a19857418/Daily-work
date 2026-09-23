@@ -155,17 +155,26 @@ ALTER TABLE qs_system_settings ADD COLUMN IF NOT EXISTS biz_quote_seq JSONB NOT 
 2. 如果動到 `backend/sql/schema.sql`，照上面「Schema 異動規則」加對應的 `ALTER TABLE ... IF NOT EXISTS`，並確認 `backend/src/repositories/*.js` 的組裝/拆解邏輯有同步更新
 3. 本機測試（見上面「本機開發測試」）：至少要驗證 `npm run migrate` 對一個全新資料庫跟一個「已經跑過舊版 migrate」的資料庫都不會出錯，且新舊資料都讀寫正確
 4. 確認沒問題後，commit + push 到 GitHub
-5. 部署：
+5. 部署測試版（UAT，不影響正式流量），在 Cloud Shell 的 `backend/` 目錄下執行：
 
    ```bash
-   cd backend
-   gcloud run deploy body-craft-management-system \
-     --project=ammanage \
-     --region=asia-east1 \
-     --source .
+   bash scripts/deploy-uat.sh
    ```
 
-6. 部署完，跑健康檢查跟基本功能確認：
+   這支腳本會自動：`git pull` 最新程式碼 → 用「當下 commit 短碼」當標籤建置一個全新映像檔（`gcloud builds submit --tag ...`，保證不會沿用到舊映像檔）→ 用 `--no-traffic --tag=uat` 部署。跑完會印出 UAT 網址。
+
+   > 為什麼不用 `gcloud run deploy --source .` 直接部署？實測遇過它有時候會誤判「原始碼沒變」而沿用舊的映像檔/Revision（畫面上程式碼明明改了，正式機卻還在跑舊版），改成手動指定全新標籤的映像檔可以徹底避開這個問題。
+
+6. 打開腳本印出的 UAT 網址，人工測試這次改動的功能（含健康檢查 `<UAT網址>/api/health`）。
+7. 測試通過後，切換正式流量，一樣在 `backend/` 目錄下執行：
+
+   ```bash
+   bash scripts/promote-prod.sh
+   ```
+
+   這支腳本會自動找出目前掛著 `uat` 標籤的 Revision（不用手動複製 Revision 名稱），列出來讓你確認，輸入 `yes` 才會真的把 100% 正式流量切過去。
+
+8. 切換完，跑健康檢查跟基本功能確認：
 
    ```bash
    curl https://body-craft-management-system-208869870497.asia-east1.run.app/api/health
