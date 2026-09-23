@@ -278,7 +278,7 @@
     .note{color:#555 !important;}
     .biz-highlight{color:#000 !important;}
     .biz-audit-note{color:#000 !important;font-weight:700 !important;}
-    #wcLiveWrap, #lcLiveWrap{ display:none !important; }
+    #wcLiveWrap, #lcLiveWrap, #histLiveWrap{ display:none !important; }
     .print-all-wrap{ display:block !important; }
     .print-page{ page-break-after: always; break-after: page; }
     .print-page:last-child{ page-break-after: auto; break-after: auto; }
@@ -287,6 +287,11 @@
     .external-remark-print{ display:block !important; }
   }
   .print-all-wrap{ display:none; }
+  /* 歷史報價查詢明細：內容是列印當下的快照，一律鎖定不可再修改 */
+  .hist-frozen .no-print{ display:none !important; }
+  .hist-frozen select:disabled, .hist-frozen input:disabled, .hist-frozen textarea:disabled{
+    opacity:1 !important; cursor:default !important; color:var(--text) !important;
+  }
   .external-remark-print{ display:none; }
 </style>
 </head>
@@ -322,7 +327,10 @@
 <main id="page-bodyshop" hidden></main>
 <main id="page-settings" hidden></main>
 <main id="page-vehicle" hidden></main>
-<main id="page-history" hidden></main>
+<main id="page-history" hidden>
+  <div id="histLiveWrap"></div>
+  <div id="histPrintAllWrap" class="print-all-wrap"></div>
+</main>
 <div class="toast" id="toast"></div>
 <input type="file" id="importFileInput" accept="application/json" hidden>
 
@@ -2683,19 +2691,22 @@ function renderHistoryDetail(){
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">📄 報價單 <span class="mono">${esc(d.quote_no)}</span> 明細</div>
-        <button class="btn no-print" id="histCloseBtn">✕ 關閉</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn no-print" id="histPrintBtn">🖨️ 列印/PDF（三版）</button>
+          <button class="btn no-print" id="histCloseBtn">✕ 關閉</button>
+        </div>
       </div>
       <div class="pill-tabs">
         ${tabs.map(([k,label])=>`<button class="no-print ${historyState.detailTab===k?'active':''}" data-hist-tab="${k}">${label}</button>`).join('')}
       </div>
-      <div class="panel-sub" style="margin-bottom:14px;">這裡顯示的是當初成功列印那一刻的三版完整內容快照，不會因為之後系統設定的價格/材質異動而改變。</div>
-      <div id="histDetailBody">${htmlByTab[historyState.detailTab] || '<div class="empty-hint">沒有這個版本的快照</div>'}</div>
+      <div class="panel-sub" style="margin-bottom:14px;">這裡顯示的是當初成功列印那一刻的三版完整內容快照，不會因為之後系統設定的價格/材質異動而改變；下方內容為唯讀，無法再修改。</div>
+      <div id="histDetailBody" class="hist-frozen">${htmlByTab[historyState.detailTab] || '<div class="empty-hint">沒有這個版本的快照</div>'}</div>
     </div>
   `;
 }
 
 function renderHistoryPage(){
-  const el = document.getElementById('page-history');
+  const el = document.getElementById('histLiveWrap');
   el.innerHTML = `
     <div class="panel">
       <div class="panel-head">
@@ -2727,6 +2738,21 @@ function renderHistoryPage(){
   el.querySelectorAll('[data-hist-tab]').forEach(btn=>{
     btn.onclick = ()=>{ historyState.detailTab = btn.dataset.histTab; renderHistoryPage(); };
   });
+  const printBtn = document.getElementById('histPrintBtn');
+  if(printBtn) printBtn.onclick = ()=>{
+    const snap = (historyState.detail && historyState.detail.snapshot) || {};
+    document.getElementById('histPrintAllWrap').innerHTML = `
+      <section class="print-page print-page-landscape">${snap.internalHtml||''}</section>
+      <section class="print-page print-page-portrait">${snap.externalHtml||''}</section>
+      <section class="print-page print-page-portrait">${snap.businessHtml||''}</section>
+    `;
+    window.print();
+  };
+  // 歷史快照是唯讀紀錄，快照裡帶出來的表單元件（下拉選單/輸入框/文字框）一律鎖定不可修改
+  const histBody = document.getElementById('histDetailBody');
+  if(histBody){
+    histBody.querySelectorAll('input, select, textarea').forEach(f=>{ f.disabled = true; });
+  }
 }
 
 /* =========================================================
