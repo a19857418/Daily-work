@@ -121,6 +121,7 @@
   .btn.danger{color:var(--red);}
   .btn.sm{padding:4px 9px;font-size:12px;border-radius:6px;}
   .btn:disabled{opacity:.35;cursor:not-allowed;}
+  #histDetailBody input:disabled, #histDetailBody select:disabled, #histDetailBody textarea:disabled{opacity:1;cursor:not-allowed;color:var(--text);-webkit-text-fill-color:var(--text);}
 
   .pill-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
   .pill-tabs button{
@@ -278,7 +279,7 @@
     .note{color:#555 !important;}
     .biz-highlight{color:#000 !important;}
     .biz-audit-note{color:#000 !important;font-weight:700 !important;}
-    #wcLiveWrap, #lcLiveWrap{ display:none !important; }
+    #wcLiveWrap, #lcLiveWrap, #histLiveWrap{ display:none !important; }
     .print-all-wrap{ display:block !important; }
     .print-page{ page-break-after: always; break-after: page; }
     .print-page:last-child{ page-break-after: auto; break-after: auto; }
@@ -295,7 +296,7 @@
 <div class="topbar">
   <div class="topbar-left">
     <a href="#" class="back-link" id="homeBackLink" hidden>← 返回首頁</a>
-    <div class="brand" id="brandText">🔧 車體工藝中心系統 <span class="tag">20260922 v4</span></div>
+    <div class="brand" id="brandText">🔧 車體工藝中心系統 <span class="tag">20260923 v1</span></div>
   </div>
   <div class="topbar-right">
     <span class="sync-pill busy" id="syncTag">連線中…</span>
@@ -2683,7 +2684,10 @@ function renderHistoryDetail(){
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">📄 報價單 <span class="mono">${esc(d.quote_no)}</span> 明細</div>
-        <button class="btn no-print" id="histCloseBtn">✕ 關閉</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn no-print" id="histPrintBtn">🖨️ 列印/PDF（三版）</button>
+          <button class="btn no-print" id="histCloseBtn">✕ 關閉</button>
+        </div>
       </div>
       <div class="pill-tabs">
         ${tabs.map(([k,label])=>`<button class="no-print ${historyState.detailTab===k?'active':''}" data-hist-tab="${k}">${label}</button>`).join('')}
@@ -2697,6 +2701,7 @@ function renderHistoryDetail(){
 function renderHistoryPage(){
   const el = document.getElementById('page-history');
   el.innerHTML = `
+    <div id="histLiveWrap">
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">🗂 歷史報價查詢</div>
@@ -2711,6 +2716,8 @@ function renderHistoryPage(){
       ${renderHistoryList()}
     </div>
     ${renderHistoryDetail()}
+    </div>
+    <div id="histPrintAllWrap" class="print-all-wrap"></div>
   `;
 
   document.getElementById('histSearchBtn').onclick = ()=>{
@@ -2727,6 +2734,43 @@ function renderHistoryPage(){
   el.querySelectorAll('[data-hist-tab]').forEach(btn=>{
     btn.onclick = ()=>{ historyState.detailTab = btn.dataset.histTab; renderHistoryPage(); };
   });
+  const printBtn = document.getElementById('histPrintBtn');
+  if(printBtn) printBtn.onclick = printHistorySnapshot;
+  bindHistorySnapshotButtons();
+}
+
+// 快照是列印當下擷取的靜態 HTML（id 已拿掉、沒有事件），裡面的對內版/對外版/業務版/列印按鈕原本點了沒反應，
+// 這裡依按鈕文字重新接上：切版本→切換歷史明細頁籤；列印→用快照重印三版；其他編輯用按鈕（清空工單等）在歷史裡沒有意義就藏起來。
+// 歷史紀錄一律唯讀：快照裡的下拉選單/輸入框/文字框全部鎖定，避免使用者以為可以改歷史報價
+function bindHistorySnapshotButtons(){
+  const body = document.getElementById('histDetailBody');
+  if(!body) return;
+  body.querySelectorAll('input, select, textarea').forEach(f=>{ f.disabled = true; });
+  const tabByText = { '對內版':'internal', '對外版':'external', '業務版':'business' };
+  body.querySelectorAll('.panel-head button').forEach(btn=>{
+    const text = btn.textContent.trim();
+    if(tabByText[text]){
+      btn.onclick = ()=>{ historyState.detailTab = tabByText[text]; renderHistoryPage(); };
+    }else if(text.includes('列印')){
+      btn.onclick = printHistorySnapshot;
+    }else{
+      btn.hidden = true;
+    }
+  });
+}
+
+// 用歷史快照重印三版（對內橫向、對外＋業務直向），不重新計價、也不再新增一筆歷史紀錄
+function printHistorySnapshot(){
+  const snap = (historyState.detail && historyState.detail.snapshot) || {};
+  const pages = [
+    ['print-page-landscape', snap.internalHtml],
+    ['print-page-portrait', snap.externalHtml],
+    ['print-page-portrait', snap.businessHtml]
+  ].filter(([,html])=>html);
+  if(!pages.length){ toast('這筆報價沒有可列印的快照'); return; }
+  document.getElementById('histPrintAllWrap').innerHTML =
+    pages.map(([cls,html])=>`<section class="print-page ${cls}">${html}</section>`).join('');
+  window.print();
 }
 
 /* =========================================================
@@ -2938,9 +2982,9 @@ function showModule(module){
   });
   document.getElementById('quoteNav').hidden = module!=='quote';
   document.getElementById('homeBackLink').hidden = module==='home';
-  document.getElementById('brandText').innerHTML = module==='quote' ? '🦏 貼膜報價系統 <span class="tag">20260922 v4</span>'
+  document.getElementById('brandText').innerHTML = module==='quote' ? '🦏 貼膜報價系統 <span class="tag">20260923 v1</span>'
     : module==='vehicle' ? '🚗 車型查詢小模組'
-    : '🔧 車體工藝中心系統 <span class="tag">20260922 v4</span>';
+    : '🔧 車體工藝中心系統 <span class="tag">20260923 v1</span>';
   if(module==='home') renderHomePage();
   if(module==='vehicle') renderVehiclePage();
   if(module==='quote') activatePage('wholecar');
