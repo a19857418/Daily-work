@@ -30,12 +30,14 @@ async function getSettings() {
     hours[r.name] = numOrNull(r.hours);
   });
 
-  const partsRes = await pool.query('SELECT name, sort_order, usage_m, hours, install_bonus FROM qs_parts ORDER BY sort_order NULLS LAST');
+  const partsRes = await pool.query('SELECT id, name, sort_order, usage_m, hours FROM qs_parts ORDER BY sort_order NULLS LAST');
   const partOrder = partsRes.rows.filter((r) => r.sort_order != null).map((r) => r.name);
   const installBonus = {};
   const localParts = {};
+  const partNameById = {};
   partsRes.rows.forEach((r) => {
-    installBonus[r.name] = numOrNull(r.install_bonus);
+    installBonus[r.name] = {};
+    partNameById[r.id] = r.name;
     if (r.sort_order != null) {
       localParts[r.name] = { usage: numOrNull(r.usage_m), hours: numOrNull(r.hours) };
     }
@@ -45,6 +47,15 @@ async function getSettings() {
   const brandOrder = brandsRes.rows.map((r) => r.name);
   const brandNameById = {};
   brandsRes.rows.forEach((r) => { brandNameById[r.id] = r.name; });
+
+  // 施工獎金（依 部位 x 廠商）
+  const installBonusRes = await pool.query('SELECT part_id, brand_id, bonus FROM qs_part_install_bonus');
+  installBonusRes.rows.forEach((r) => {
+    const partName = partNameById[r.part_id];
+    const brandName = brandNameById[r.brand_id];
+    if (!partName || !brandName) return;
+    installBonus[partName][brandName] = numOrNull(r.bonus);
+  });
 
   const materialsRes = await pool.query('SELECT id, brand_id, category, name, piece_rate FROM qs_materials ORDER BY sort_order');
   const rollsRes = await pool.query('SELECT material_id, unit_m, cost FROM qs_material_rolls ORDER BY id');
@@ -153,6 +164,7 @@ async function replaceSettings(data, updatedBy, expectedVersion) {
 
     await client.query('DELETE FROM qs_op_code_specific_parts');
     await client.query('DELETE FROM qs_op_codes');
+    await client.query('DELETE FROM qs_part_install_bonus');
     await client.query('DELETE FROM qs_local_part_price');
     await client.query('DELETE FROM qs_whole_car_price');
     await client.query('DELETE FROM qs_material_rolls');
@@ -193,15 +205,15 @@ async function replaceSettings(data, updatedBy, expectedVersion) {
       const p = partOrder[i];
       const localPart = data.local?.parts?.[p] || {};
       const res = await client.query(
-        'INSERT INTO qs_parts (name, sort_order, usage_m, hours, install_bonus) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-        [p, i, localPart.usage ?? null, localPart.hours ?? null, data.installBonus?.[p] ?? null]
+        'INSERT INTO qs_parts (name, sort_order, usage_m, hours, install_bonus) VALUES ($1,$2,$3,$4,NULL) RETURNING id',
+        [p, i, localPart.usage ?? null, localPart.hours ?? null]
       );
       partIdByName[p] = res.rows[0].id;
     }
     for (const p of extraPartNames) {
       const res = await client.query(
-        'INSERT INTO qs_parts (name, sort_order, usage_m, hours, install_bonus) VALUES ($1,NULL,NULL,NULL,$2) RETURNING id',
-        [p, data.installBonus?.[p] ?? null]
+        'INSERT INTO qs_parts (name, sort_order, usage_m, hours, install_bonus) VALUES ($1,NULL,NULL,NULL,NULL) RETURNING id',
+        [p]
       );
       partIdByName[p] = res.rows[0].id;
     }
@@ -213,6 +225,23 @@ async function replaceSettings(data, updatedBy, expectedVersion) {
       const b = brandOrder[i];
       const res = await client.query('INSERT INTO qs_brands (name, sort_order) VALUES ($1,$2) RETURNING id', [b, i]);
       brandIdByName[b] = res.rows[0].id;
+    }
+
+    // 施工獎金（依 部位 x 廠商）
+    for (const partName of Object.keys(data.installBonus || {})) {
+      const partId = partIdByName[partName];
+      if (partId == null) continue;
+      const byBrand = data.installBonus[partName];
+      if (!byBrand || typeof byBrand !== 'object') continue;
+      for (const bn of Object.keys(byBrand)) {
+        const brandId = brandIdByName[bn];
+        if (brandId == null) continue;
+        await client.query('INSERT INTO qs_part_install_bonus (part_id, brand_id, bonus) VALUES ($1,$2,$3)', [
+          partId,
+          brandId,
+          byBrand[bn] ?? null,
+        ]);
+      }
     }
 
     // 材質、捲成本、整台車售價

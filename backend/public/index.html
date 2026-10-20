@@ -403,10 +403,12 @@ function factoryDB(){
   return {
     groupOrder: ["小車","一般車","大車"],
     partOrder: [...PART_ORDER_DEFAULT, "保險桿(前或後)/後葉子板", "引擎蓋/側裙(單支)", "葉子板(前)(後)門/後尾門/後廂"],
+    // 施工獎金：依「部位 × 膜料廠商」分別設定（同廠商不分車型大小／不分產品類別）
     installBonus: {
-      "全車":5000, "迎風面":3000, "天橋(屋頂)":3000, "後視鏡(2個)":null, "大燈(2個)":null,
-      "尾燈(2個)":null, "水箱護罩(外一圈)":null, "四門外把手(改色)":null, "左側裙(單支)":null, "右側裙(單支)":null,
-      "保險桿(前或後)/後葉子板":null, "引擎蓋/側裙(單支)":null, "葉子板(前)(後)門/後尾門/後廂":null
+      "全車":{"3M":5000,"STEK":5000}, "迎風面":{"3M":3000,"STEK":3000}, "天橋(屋頂)":{"3M":3000,"STEK":3000},
+      "後視鏡(2個)":{"3M":null,"STEK":null}, "大燈(2個)":{"3M":null,"STEK":null},
+      "尾燈(2個)":{"3M":null,"STEK":null}, "水箱護罩(外一圈)":{"3M":null,"STEK":null}, "四門外把手(改色)":{"3M":null,"STEK":null}, "左側裙(單支)":{"3M":null,"STEK":null}, "右側裙(單支)":{"3M":null,"STEK":null},
+      "保險桿(前或後)/後葉子板":{"3M":null,"STEK":null}, "引擎蓋/側裙(單支)":{"3M":null,"STEK":null}, "葉子板(前)(後)門/後尾門/後廂":{"3M":null,"STEK":null}
     },
     hourlyWage: 220,
     partsRatioPercent: 70, // 零件／工資拆分：零件佔比(%)，工資佔比 = 100 - 此值（預設零件70%／工資30%）
@@ -708,6 +710,7 @@ async function importDBFromFile(file){
     ensureDiscountDefaults();
     ensureUsageStructure();
     ensureV14DataFill();
+    ensureInstallBonusByBrand();
     ensureFullPriceBonusRule();
     ensureLocalFullPriceRule();
     ensureDiscountBonusFix20260817();
@@ -1292,7 +1295,7 @@ function renderWholeCarResult(view = wholeCarState.view, wrap = document.getElem
   const costInfo = getMaterialCost(brand, category, material, usage, 'whole');
   const mat = getMaterial(brand, category, material);
   const listPrice = mat.priceByGroup[group];
-  const installBonusVal = DB.installBonus["全車"];
+  const installBonusVal = DB.installBonus["全車"]?.[brand];
   const rules = DB.wholeCar.discountRules[brand] || [];
   const rule = rules.find(r=>r.id===wholeCarState.ruleId) || rules[0];
 
@@ -1576,7 +1579,7 @@ function renderLocalTable(view = localState.view, wrap = document.getElementById
     const partData = DB.local.parts[row.part] || {usage:null,hours:null};
     const listPrice = DB.local.price[row.part]?.[brand]?.[row.category];
     const costInfo = getMaterialCost(brand, row.category, row.material, partData.usage, 'local');
-    const installBonusVal = DB.installBonus[row.part];
+    const installBonusVal = DB.installBonus[row.part]?.[brand];
     const bonusEligible = BONUS_ELIGIBLE_PARTS.includes(row.part);
     const key = 'localrow_'+row.id;
     const ov = { businessPrice: row.bizOverride, bonus: row.bonusOverride };
@@ -1929,9 +1932,14 @@ function renderGroupsSettings(body){
         </div>
         <button class="btn" id="btnResetAll">↺ 還原全部預設</button>
       </div>
-      <label class="field" style="max-width:220px;margin-bottom:16px;">全車施工獎金（元，不分車型大小，跟局部部位共用同一份施工獎金設計）
-        <input type="text" inputmode="decimal" class="mono" id="fullCarBonusInput" value="${DB.installBonus['全車']!=null?formatMoney(DB.installBonus['全車']):''}" placeholder="未輸入">
-      </label>
+      <div class="panel-sub" style="margin-bottom:6px;">全車施工獎金（元，不分車型大小；依膜料廠商分別設定）</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;">
+        ${DB.brandOrder.map(bn=>`
+          <label class="field" style="max-width:160px;">${bn}
+            <input type="text" inputmode="decimal" class="mono" value="${DB.installBonus['全車']?.[bn]!=null?formatMoney(DB.installBonus['全車'][bn]):''}" placeholder="未輸入" data-fullcar-bonus-brand="${bn}">
+          </label>
+        `).join('')}
+      </div>
       <div class="pill-tabs" id="groupTabs">
         ${DB.groupOrder.map(name=>`<button data-g="${name}" class="${name===g?'active':''}">${name}</button>`).join('')}
       </div>
@@ -1982,10 +1990,12 @@ function renderGroupsSettings(body){
   body.querySelectorAll('#groupTabs button[data-g]').forEach(b=>{
     b.onclick=()=>{ groupsTabState=b.dataset.g; renderGroupsSettings(body); };
   });
-  document.getElementById('fullCarBonusInput').onchange = async e=>{
-    DB.installBonus['全車'] = parseMoney(e.target.value);
-    await saveDB(); renderWholeCarPage(); renderLocalPage();
-  };
+  body.querySelectorAll('[data-fullcar-bonus-brand]').forEach(inp=>{
+    inp.onchange = async ()=>{
+      DB.installBonus['全車'][inp.dataset.fullcarBonusBrand] = parseMoney(inp.value);
+      await saveDB(); renderWholeCarPage(); renderLocalPage();
+    };
+  });
   document.getElementById('wcHoursInput').onchange = async e=>{
     DB.wholeCar.hours[g] = e.target.value===''? null : parseFloat(e.target.value);
     await saveDB(); renderWholeCarPage();
@@ -2052,6 +2062,7 @@ function renderMaterialsSettings(body){
     DB.brandOrder.push(name);
     DB.wholeCar.discountRules[name] = defaultDiscountRules('whole');
     DB.local.discountRules[name] = defaultDiscountRules('local');
+    for(const p in DB.installBonus){ DB.installBonus[p][name] = null; }
     await saveDB(); materialsTabState=name; toast('已新增廠商：'+name); renderSettingsPage(); renderWholeCarPage();
   };
 
@@ -2217,7 +2228,7 @@ function renderLocalPartsSettings(body){
       <div class="panel-head">
         <div>
           <div class="panel-title">📐 局部模式：使用米數／工時／施工獎金／售價</div>
-          <div class="panel-sub">使用米數與工時為單一值（不分車型大小）；售價依「部位×廠商×產品類別」，同類別規格共用。表格會列出全部局部部位，往下捲動即可看到所有資料（「全車」的施工獎金請到「車型群組」頁設定）</div>
+          <div class="panel-sub">使用米數與工時為單一值（不分車型大小）；施工獎金與售價都依「部位×廠商」分別設定。表格會列出全部局部部位，往下捲動即可看到所有資料（「全車」的施工獎金請到「車型群組」頁設定）</div>
         </div>
         <button class="btn primary" id="btnSaveAll3">💾 儲存設定</button>
       </div>
@@ -2227,11 +2238,15 @@ function renderLocalPartsSettings(body){
           <th style="text-align:left;">部位</th>
           <th>使用米數</th>
           <th>工時</th>
-          <th>施工獎金</th>
+          ${DB.brandOrder.map(bn=>`<th>${bn}<br>施工獎金</th>`).join('')}
           ${brandCatCols.map(c=>`<th>${c.brand}<br>${c.cat}</th>`).join('')}
         </tr>
         ${DB.partOrder.map(part=>{
           const pd = DB.local.parts[part] || emptyLocalPart();
+          const bonusCells = DB.brandOrder.map(bn=>{
+            const val = DB.installBonus[part]?.[bn];
+            return `<td><input type="text" inputmode="decimal" class="cell-input mono" value="${val!=null?formatMoney(val):''}" placeholder="未輸入" data-bonus-part="${part}|${bn}"></td>`;
+          }).join('');
           const priceCells = brandCatCols.map(c=>{
             const val = DB.local.price[part]?.[c.brand]?.[c.cat];
             return `<td><input type="text" inputmode="decimal" class="cell-input mono" value="${val!=null?formatMoney(val):''}" placeholder="${c.has?'未輸入':'—'}" data-local-price="${part}|${c.brand}|${c.cat}" ${c.has?'':'disabled'}></td>`;
@@ -2240,7 +2255,7 @@ function renderLocalPartsSettings(body){
             <td style="text-align:left;">${part}</td>
             <td><input type="number" step="0.1" class="cell-input mono" value="${pd.usage??''}" placeholder="未輸入" data-part-usage="${part}"></td>
             <td><input type="number" step="0.5" class="cell-input mono" value="${pd.hours??''}" placeholder="未輸入" data-part-hours="${part}"></td>
-            <td><input type="text" inputmode="decimal" class="cell-input mono" value="${DB.installBonus[part]!=null?formatMoney(DB.installBonus[part]):''}" placeholder="未輸入" data-bonus-part="${part}"></td>
+            ${bonusCells}
             ${priceCells}
           </tr>`;
         }).join('')}
@@ -2256,7 +2271,8 @@ function renderLocalPartsSettings(body){
     DB.partOrder.push(v);
     DB.local.parts[v] = emptyLocalPart();
     DB.local.price[v] = {};
-    DB.installBonus[v] = null;
+    DB.installBonus[v] = {};
+    DB.brandOrder.forEach(bn=>{ DB.installBonus[v][bn] = null; });
     inp.value='';
     await saveDB(); renderLocalPartsSettings(body); renderLocalPage();
   };
@@ -2287,8 +2303,8 @@ function renderLocalPartsSettings(body){
   });
   body.querySelectorAll('[data-bonus-part]').forEach(inp=>{
     inp.onchange = async ()=>{
-      const p = inp.dataset.bonusPart;
-      DB.installBonus[p] = parseMoney(inp.value);
+      const [p, bn] = inp.dataset.bonusPart.split('|');
+      DB.installBonus[p][bn] = parseMoney(inp.value);
       await saveDB(); renderWholeCarPage(); renderLocalPage();
     };
   });
@@ -2320,6 +2336,20 @@ function ensureUsageStructure(){
       DB.wholeCar.usage[g] = { "犀牛皮類": u ?? null, "改色膜類": u ?? null };
     }
   });
+}
+// 舊版存檔的 installBonus 是「部位→單一數字」，新版改為「部位→膜料廠商→數字」，這裡做一次性轉換；
+// 既有數字沿用成「該部位下，目前所有廠商都先套用同一個值」，之後可在系統設定裡個別調整，不會變成空白
+function ensureInstallBonusByBrand(){
+  for(const part in DB.installBonus){
+    const v = DB.installBonus[part];
+    if(v==null || typeof v === 'number'){
+      const seeded = {};
+      DB.brandOrder.forEach(bn=>{ seeded[bn] = v ?? null; });
+      DB.installBonus[part] = seeded;
+    } else {
+      DB.brandOrder.forEach(bn=>{ if(!(bn in v)) v[bn] = null; });
+    }
+  }
 }
 // 一次性回填：舊存檔裡尚未輸入(null)的既有資料，補上使用者最新提供的定值。只補null，不覆蓋使用者已手動輸入過的數字
 function ensureV14DataFill(){
@@ -3037,6 +3067,7 @@ document.getElementById('lockPill').onclick = ()=>{
   ensureDiscountDefaults();
   ensureUsageStructure();
   ensureV14DataFill();
+  ensureInstallBonusByBrand();
   ensureFullPriceBonusRule();
   ensureLocalFullPriceRule();
   ensureDiscountBonusFix20260817();

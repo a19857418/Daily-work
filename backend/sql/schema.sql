@@ -122,6 +122,27 @@ CREATE TABLE IF NOT EXISTS qs_local_part_price (
   PRIMARY KEY (part_id, brand_id, category)
 );
 
+-- 施工獎金：依「部位 x 廠商」分別設定，取代 qs_parts.install_bonus 單一數字欄位
+-- （該欄位保留不刪除，但不再寫入有意義的值；實際資料以這張表為準）
+CREATE TABLE IF NOT EXISTS qs_part_install_bonus (
+  part_id  INTEGER NOT NULL REFERENCES qs_parts(id) ON DELETE CASCADE,
+  brand_id INTEGER NOT NULL REFERENCES qs_brands(id) ON DELETE CASCADE,
+  bonus    NUMERIC,
+  PRIMARY KEY (part_id, brand_id)
+);
+
+-- 一次性資料回填：把舊的 qs_parts.install_bonus（單一數字，不分廠商）展開成
+-- 「該部位、當時所有已存在廠商」在新表的初始值，確保既有已設定好的施工獎金不會因為這次改版而消失。
+-- 只在新表完全還是空的時候才執行一次；只要新表裡已經有任何一筆資料（不論是這次回填或使用者手動調整過），
+-- 之後每次 migrate 都不會再覆蓋，不影響使用者後續個別調整。
+INSERT INTO qs_part_install_bonus (part_id, brand_id, bonus)
+SELECT p.id, b.id, p.install_bonus
+FROM qs_parts p
+CROSS JOIN qs_brands b
+WHERE p.install_bonus IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM qs_part_install_bonus)
+ON CONFLICT (part_id, brand_id) DO NOTHING;
+
 -- id 是前端產生的字串，只在「同一 mode + 同一廠商」的清單裡保證唯一（不同廠商可能巧合出現相同 id），
 -- 所以主鍵用 (mode, brand_id, id) 複合鍵，不用單一 id 全域唯一。
 CREATE TABLE IF NOT EXISTS qs_discount_rules (
