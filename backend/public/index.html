@@ -411,7 +411,6 @@ function factoryDB(){
       "保險桿(前或後)/後葉子板":{"3M":null,"STEK":null}, "引擎蓋/側裙(單支)":{"3M":null,"STEK":null}, "葉子板(前)(後)門/後尾門/後廂":{"3M":null,"STEK":null}
     },
     hourlyWage: 220,
-    partsRatioPercent: 70, // 零件／工資拆分：零件佔比(%)，工資佔比 = 100 - 此值（預設零件70%／工資30%）
 
     wholeCar: {
       usage: {
@@ -714,7 +713,6 @@ async function importDBFromFile(file){
     ensureFullPriceBonusRule();
     ensureLocalFullPriceRule();
     ensureDiscountBonusFix20260817();
-    ensurePartsRatioDefault();
     ensureOpCodes();
     await saveDB();
     toast('已匯入系統設定');
@@ -960,12 +958,6 @@ function getOpCodeForPart(part){
   if(oc.localSpecific.parts.includes(part)) return oc.localSpecific;
   return oc.localOther;
 }
-// 零件／工資拆分比例：依業務/接待售價(未稅)拆分，供交接零件與接待人員使用。
-// 比例可在「系統設定 → 車型群組」調整（DB.partsRatioPercent），出廠預設零件70%／工資30%
-function partsLaborSplit(){
-  const partsPct = DB.partsRatioPercent!=null ? DB.partsRatioPercent : 70;
-  return { parts: partsPct/100, labor: (100-partsPct)/100 };
-}
 const ACCOUNT_TYPE_OPTIONS = ['內帳','自費'];
 const PAYMENT_TARGET_OPTIONS = ['售服','新車','BoxBox來店客'];
 
@@ -978,7 +970,7 @@ function buildOpCodeLine({scope, group, part, brand, category, material, rowId, 
 function opLineFullText(l){
   return `${l.prefix} ${l.brand}-${l.category} ${l.material}${l.manualText?(' '+l.manualText):''}`;
 }
-// 內部資訊區塊：僅供對內版使用（客戶對外版不會顯示）。含車牌/業務接待人員、施工代碼、帳務歸屬/付款對象、零件工資拆分
+// 內部資訊區塊：僅供對內版使用（客戶對外版不會顯示）。含車牌/業務接待人員、施工代碼、帳務歸屬/付款對象
 // meta = {licensePlate, salesStaff}，整張報價單共用一組（不分行），會印在紙本上，所以不是 no-print
 function opCodeBlockHtml(lines, meta){
   if(!lines.length) return '';
@@ -998,9 +990,6 @@ function opCodeBlockHtml(lines, meta){
       </div>
       ${lines.map(l=>{
         const fullLine = opLineFullText(l);
-        const split = partsLaborSplit();
-        const partsAmt = l.exclTax!=null ? Math.round(l.exclTax*split.parts) : null;
-        const laborAmt = l.exclTax!=null ? (l.exclTax - partsAmt) : null; // 兩者相加=業務/接待售價，避免四捨五入誤差對不上
         return `
         <div style="margin-bottom:16px;">
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -1028,11 +1017,6 @@ function opCodeBlockHtml(lines, meta){
           <div class="mono" style="margin-top:10px;margin-left:2px;">
             帳務：${l.accountType || '<span class="placeholder-val">未選擇</span>'}　付款對象：${l.paymentTarget || '<span class="placeholder-val">未選擇</span>'}
           </div>
-          ${l.exclTax!=null ? `
-          <div class="mono" style="margin-top:10px;margin-left:2px;">
-            零件(未稅)　<span class="val-teal" style="font-weight:700;">${fmt(partsAmt)}</span>　　工資(未稅)　<span class="val-amber" style="font-weight:700;">${fmt(laborAmt)}</span>
-          </div>
-          <div class="note" style="margin-top:4px;margin-left:2px;">依業務/接待售價未稅金額 ${Math.round(split.parts*100)}%／${Math.round(split.labor*100)}% 拆分，交接零件與接待人員依此金額登打工單</div>` : ''}
         </div>
       `;}).join('')}
     </div>
@@ -1916,12 +1900,6 @@ function renderGroupsSettings(body){
         <label class="field" style="max-width:200px;">人工時薪（元/小時）
           <input type="text" inputmode="decimal" class="mono" id="hourlyWageInput" value="${formatMoney(DB.hourlyWage)}">
         </label>
-        <label class="field" style="max-width:200px;">內部資訊：零件比例（%）
-          <input type="number" min="0" max="100" step="1" class="mono" id="partsRatioInput" value="${DB.partsRatioPercent}">
-        </label>
-        <div class="field" style="max-width:200px;">工資比例（%，＝100－零件比例）
-          <div class="readonly-field" id="laborRatioDisplay" style="padding:9px 0;font-size:13px;">${100-DB.partsRatioPercent}%</div>
-        </div>
       </div>
     </div>
     <div class="panel" style="max-width:640px;">
@@ -1972,15 +1950,6 @@ function renderGroupsSettings(body){
   document.getElementById('btnSaveAllTop').onclick = async ()=>{
     DB.hourlyWage = parseMoney(document.getElementById('hourlyWageInput').value)||0;
     await saveDB(); toast('已儲存設定');
-  };
-  document.getElementById('partsRatioInput').onchange = async e=>{
-    let v = parseFloat(e.target.value);
-    if(isNaN(v)) v = 70;
-    v = Math.min(100, Math.max(0, v));
-    DB.partsRatioPercent = v;
-    e.target.value = v;
-    document.getElementById('laborRatioDisplay').textContent = (100-v)+'%';
-    await saveDB(); renderWholeCarPage();
   };
   document.getElementById('btnResetAll').onclick = async ()=>{
     if(confirm('確定要還原「全部」設定為出廠預設值嗎？此動作無法復原。')){
@@ -2461,10 +2430,6 @@ function ensureDiscountBonusFix20260817(){
       else if(r.name==='原價(無折扣)' && r.bonusValue===0.20) r.bonusValue = 0.15;
     });
   });
-}
-// 舊存檔沒有零件/工資拆分比例欄位時，補上出廠預設值（零件70%／工資30%）
-function ensurePartsRatioDefault(){
-  if(DB.partsRatioPercent==null) DB.partsRatioPercent = 70;
 }
 // 舊存檔沒有 opCodes 欄位時，補上出廠預設的三組OP代碼
 function ensureOpCodes(){
@@ -3071,7 +3036,6 @@ document.getElementById('lockPill').onclick = ()=>{
   ensureFullPriceBonusRule();
   ensureLocalFullPriceRule();
   ensureDiscountBonusFix20260817();
-  ensurePartsRatioDefault();
   ensureOpCodes();
   // 只有資料真的被這些一次性遷移函式改過、且目前是解鎖狀態時才寫回後端；
   // 一般訪客（未解鎖）仍會在本次瀏覽階段套用這些修正值，只是不會嘗試寫入後端
